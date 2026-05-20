@@ -1,0 +1,7 @@
+config BR2_PACKAGE_SNAPDOG_CTRL
+	bool "snapdog-ctrl"
+	help
+	  Web-based device setup for SnapDog OS.
+	  Provides WiFi configuration, network settings,
+	  and snapdog-client configuration via a local web UI.
+	  https://github.com/metaneutrons/snapdog-ctrl

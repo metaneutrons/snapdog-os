@@ -1,0 +1,17 @@
+[Unit]
+Description=SnapDog Setup (device configuration web UI)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/snapdog-ctrl
+Restart=on-failure
+RestartSec=5
+DynamicUser=yes
+SupplementaryGroups=netdev
+AmbientCapabilities=CAP_NET_BIND_SERVICE CAP_NET_ADMIN
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

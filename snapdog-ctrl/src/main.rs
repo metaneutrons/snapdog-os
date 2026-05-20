@@ -1,0 +1,104 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// Copyright (C) 2026 Fabian Schmieder
+
+mod config_txt;
+#[cfg(debug_assertions)]
+mod mock;
+#[cfg(debug_assertions)]
+#[allow(dead_code)]
+mod network;
+#[cfg(not(debug_assertions))]
+mod network;
+#[cfg_attr(debug_assertions, allow(dead_code, unused_imports))]
+mod routes;
+#[cfg_attr(debug_assertions, allow(dead_code))]
+mod system;
+
+use axum::Router;
+use tower_http::{compression::CompressionLayer, trace::TraceLayer};
+use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into());
+
+    #[cfg(target_os = "linux")]
+    {
+        let journald = tracing_journald::layer().ok();
+        if journald.is_some() {
+            tracing_subscriber::registry()
+                .with(filter)
+                .with(journald)
+                .init();
+        } else {
+            tracing_subscriber::registry()
+                .with(filter)
+                .with(tracing_subscriber::fmt::layer())
+                .init();
+        }
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        tracing_subscriber::registry()
+            .with(filter)
+            .with(tracing_subscriber::fmt::layer())
+            .init();
+    }
+
+    let app = build_app();
+
+    let port = std::env::var("SNAPDOG_SETUP_PORT")
+        .ok()
+        .and_then(|p| p.parse::<u16>().ok())
+        .unwrap_or(80);
+
+    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}")).await?;
+    tracing::info!("snapdog-ctrl listening on port {port}");
+
+    // Mark boot as successful (clears OTA rollback counter)
+    #[cfg(target_os = "linux")]
+    {
+        if tokio::fs::remove_file("/boot/boot-attempts").await.is_ok() {
+            tracing::info!("Boot marked successful (OTA rollback counter cleared)");
+        }
+    }
+
+    axum::serve(listener, app).await?;
+
+    Ok(())
+}
+
+#[cfg(debug_assertions)]
+fn build_app() -> Router {
+    let mock = mock::MockState::new();
+    tracing::info!("🔶 Running in MOCK mode (debug build)");
+
+    Router::new()
+        .nest("/api", routes::api_mock(mock))
+        .fallback(routes::static_files)
+        .layer(CompressionLayer::new())
+        .layer(TraceLayer::new_for_http())
+}
+
+#[cfg(not(debug_assertions))]
+fn build_app() -> Router {
+    // Auto-start AP if no WiFi is configured
+    tokio::spawn(async {
+        if !network::is_wifi_configured().await {
+            tracing::info!("No WiFi configured — starting temporary AP (SSID: SnapDog-Setup)");
+            if let Err(e) = network::start_ap().await {
+                tracing::error!("Failed to start AP: {e}");
+            }
+        }
+        // Configure resolved
+        let _ = network::configure_resolved().await;
+    });
+
+    Router::new()
+        .nest("/api", routes::api())
+        .merge(routes::captive_portal_routes())
+        .fallback(routes::static_files)
+        .layer(CompressionLayer::new())
+        .layer(TraceLayer::new_for_http())
+}

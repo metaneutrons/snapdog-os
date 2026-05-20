@@ -1,0 +1,84 @@
+#!/bin/sh
+
+# Detect the device used for the root file system
+DEVICEBASE=$(mount | grep " / " | awk '{print $1}' | sed 's/[0-9]$//')
+DEVICE=$(echo "$DEVICEBASE" | sed 's/p$//')
+
+if [ -f /resize-me.2 ]; then
+  echo "Resizing file system on ${DEVICEBASE}2"
+  resize2fs -p "${DEVICEBASE}2"
+  rm /resize-me.2
+fi
+
+if [ ! -f /resize-me ]; then
+  echo "/resize-me does not exist, aborting"
+  exit 0
+fi
+
+# Delete partitions 2-4
+for N in 2 3 4; do
+  if [ -b "${DEVICEBASE}${N}" ]; then
+    fdisk "$DEVICE" <<EOT
+d
+$N
+w
+EOT
+    partprobe
+  fi
+done
+
+# Find the last sector of partition 1
+P0=$(fdisk -l "$DEVICE" | grep "${DEVICE}.*p1 " | awk '{print $4}')
+
+# Size of partition 2 and 3 depends on SD card size
+SIZE=$(lsblk -bno SIZE "$DEVICE" | head -1)
+P1=$((P0 + 1))
+P2=$((P0 + 3000000))
+P3=$((P0 + 3000001))
+P4=$((P0 + 6000000))
+if [ "$SIZE" -gt 15000000000 ]; then
+  P2=$((P0 + 8000000))
+  P3=$((P0 + 8000001))
+  P4=$((P0 + 16000000))
+fi
+if [ "$SIZE" -gt 30000000000 ]; then
+  P2=$((P0 + 16000000))
+  P3=$((P0 + 16000001))
+  P4=$((P0 + 32000000))
+fi
+
+echo "New partitions: p2=$P1..$P2  p3=$P3..$P4  p4=rest"
+sleep 4
+
+# Create partitions 2, 3, and 4
+fdisk "$DEVICE" <<EOT
+n
+p
+2
+$P1
+$P2
+n
+p
+3
+$P3
+$P4
+n
+p
+
+
+w
+EOT
+partprobe
+sleep 10
+
+e2fsck -f -p "${DEVICEBASE}2"
+
+rm /resize-me
+touch /resize-me.2
+
+# Create ext4 fs on data partition if needed
+if ! e2fsck -n "${DEVICEBASE}4" >/dev/null 2>&1; then
+  mkfs.ext4 -F "${DEVICEBASE}4"
+fi
+
+echo "Resized partitions" >> /tmp/reboot

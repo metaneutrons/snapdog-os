@@ -1,0 +1,4 @@
+config BR2_PACKAGE_COPY_OVERLAYS
+	bool "copy overlays"
+	help
+	  Copy device tree overlays (I2S DAC/AMP boards) to firmware directory.

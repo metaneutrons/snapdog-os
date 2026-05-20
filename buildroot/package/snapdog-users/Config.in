@@ -1,0 +1,5 @@
+config BR2_PACKAGE_SNAPDOG_USERS
+	bool "snapdog-users"
+	help
+	  Creates users and groups required by SnapDog OS.
+	depends on BR2_PACKAGE_SNAPDOG_BASE

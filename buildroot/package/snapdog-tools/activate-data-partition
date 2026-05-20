@@ -1,0 +1,22 @@
+#!/bin/sh
+DEVICE=$(mount | grep " / " | awk '{print $1}' | sed 's/[0-9]$//')
+
+if [ ! -d /data ]; then
+  mkdir /data
+fi
+
+# Create ext4 on partition 4 if needed
+if ! e2fsck -n "${DEVICE}4" >/dev/null 2>&1; then
+  mkfs.ext4 -F "${DEVICE}4"
+fi
+
+# Mount data partition
+if ! mount | grep -q "/data"; then
+  mount "${DEVICE}4" /data
+  # Add to fstab if not present
+  if ! grep -q "${DEVICE}4" /etc/fstab; then
+    echo "${DEVICE}4    /data    ext4    defaults,nofail    0    2" >> /etc/fstab
+  fi
+fi
+
+systemctl disable activate-data-partition.service

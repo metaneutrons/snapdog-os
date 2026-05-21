@@ -98,7 +98,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential git wget cpio unzip rsync bc \
-            python3 file libncurses-dev libssl-dev
+            python3 file libncurses-dev libssl-dev \
+            dosfstools mtools e2fsprogs
 
       - name: Cache buildroot
         uses: actions/cache@v4
@@ -186,8 +187,13 @@ jobs:
           AWS_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
           AWS_DEFAULT_REGION: auto
         run: |
-          VERSION="${{ needs.build-image.outputs.version }}"
-          CHANNEL="${{ needs.build-image.outputs.channel }}"
+          if [ "${{ needs.release-please.outputs.release_created }}" = "true" ]; then
+            VERSION="${{ needs.release-please.outputs.version }}"
+            CHANNEL="stable"
+          else
+            VERSION="$(cat VERSION)-beta.${{ github.run_number }}"
+            CHANNEL="beta"
+          fi
 
           for pi in pi3 pi4 pi5; do
             IMAGE="artifacts/image-${pi}/snapdog-os-${pi}-${VERSION}.img.gz"

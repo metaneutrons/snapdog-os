@@ -105,13 +105,7 @@ jobs:
           sudo dpkg --add-architecture arm64
           sudo sed -i '/^Architectures:/d' /etc/apt/sources.list.d/ubuntu.sources
           sudo sed -i '/^Types:/a Architectures: amd64' /etc/apt/sources.list.d/ubuntu.sources
-          cat <<'EOF' | sudo tee /etc/apt/sources.list.d/arm64-ports.sources
-Types: deb
-URIs: http://ports.ubuntu.com/ubuntu-ports
-Suites: noble noble-updates
-Components: main universe
-Architectures: arm64
-EOF
+          printf 'Types: deb\nURIs: http://ports.ubuntu.com/ubuntu-ports\nSuites: noble noble-updates\nComponents: main universe\nArchitectures: arm64\n' | sudo tee /etc/apt/sources.list.d/arm64-ports.sources
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             gcc-aarch64-linux-gnu libc6-dev-arm64-cross \

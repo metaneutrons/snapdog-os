@@ -1,5 +1,12 @@
 #!/bin/sh
-# Only check formatting if Rust files are staged
+# Rust: check formatting
 if git diff --cached --name-only | grep -q '\.rs$'; then
-  cd snapdog-ctrl && cargo fmt --check
+  cd snapdog-ctrl && cargo fmt --check || exit 1
+  cd ..
+fi
+
+# TypeScript: lint
+if git diff --cached --name-only | grep -q 'snapdog-ctrl/webui/'; then
+  cd snapdog-ctrl/webui && npx eslint src/ --max-warnings=0 || exit 1
+  cd ../..
 fi

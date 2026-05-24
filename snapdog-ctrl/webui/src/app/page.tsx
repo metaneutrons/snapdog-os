@@ -17,6 +17,7 @@ import {
   type SshConfig,
   type ServerConfig,
   type ServerStatus,
+  type AuthStatus,
 } from "@/lib/api";
 import { useI18n } from "@/i18n/provider";
 import { locales, type Locale } from "@/i18n/config";
@@ -1788,7 +1789,87 @@ function ServerIntegrationsSubTab({ config, setConfig }: { config: ServerConfig;
 
 const TABS: Tab[] = ["dashboard", "network", "audio", "client", "server", "ssh", "update", "system"];
 
-export default function SetupPage() {
+export default function Page() {
+  const [authState, setAuthState] = useState<"loading" | "login" | "ready">("loading");
+  const [loginError, setLoginError] = useState(false);
+  const [password, setPassword] = useState("");
+  const passwordId = useId();
+
+  const checkAuth = useCallback(async () => {
+    try {
+      const status: AuthStatus = await api.getAuthStatus();
+      setAuthState(!status.enabled || status.authenticated ? "ready" : "login");
+    } catch {
+      setAuthState("ready");
+    }
+  }, []);
+
+  useEffect(() => { checkAuth(); }, [checkAuth]);
+
+  useEffect(() => {
+    const handler = () => setAuthState("login");
+    window.addEventListener("snapdog-auth-expired", handler);
+    return () => window.removeEventListener("snapdog-auth-expired", handler);
+  }, []);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError(false);
+    const ok = await api.login(password);
+    if (ok) {
+      setPassword("");
+      setAuthState("ready");
+    } else {
+      setLoginError(true);
+    }
+  };
+
+  if (authState === "loading") {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Skeleton className="h-8 w-48" />
+      </div>
+    );
+  }
+
+  if (authState === "login") {
+    return (
+      <div className="flex items-center justify-center min-h-screen p-4">
+        <form onSubmit={handleLogin} className="w-full max-w-sm space-y-4">
+          <div className="text-center space-y-2">
+            <h1 className="text-2xl font-bold">SnapDog</h1>
+            <p className="text-sm text-muted-foreground">Enter password to continue</p>
+          </div>
+          <div className="space-y-2">
+            <label htmlFor={passwordId} className="sr-only">Password</label>
+            <Input
+              id={passwordId}
+              type="password"
+              value={password}
+              onChange={(e) => { setPassword(e.target.value); setLoginError(false); }}
+              placeholder="Password"
+              autoFocus
+              aria-invalid={loginError}
+              aria-describedby={loginError ? `${passwordId}-error` : undefined}
+            />
+            {loginError && (
+              <p id={`${passwordId}-error`} className="text-sm text-destructive" role="alert">
+                Incorrect password
+              </p>
+            )}
+          </div>
+          <Button type="submit" className="w-full" disabled={!password}>
+            Login
+          </Button>
+        </form>
+      </div>
+    );
+  }
+
+  return <SetupPage />;
+}
+
+function SetupPage() {
   const t = useTranslations("tabs");
   const systemT = useTranslations("system");
   const [tab, setTab] = useState<Tab>("dashboard");

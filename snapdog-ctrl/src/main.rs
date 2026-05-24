@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Copyright (C) 2026 Fabian Schmieder
 
+mod auth;
 mod config_txt;
 mod mdns;
 #[cfg(debug_assertions)]
@@ -49,7 +50,7 @@ async fn main() -> anyhow::Result<()> {
             .init();
     }
 
-    let app = build_app();
+    let app = build_app().await;
 
     let port = std::env::var("SNAPDOG_SETUP_PORT")
         .ok()
@@ -101,9 +102,11 @@ async fn main() -> anyhow::Result<()> {
 }
 
 #[cfg(debug_assertions)]
-fn build_app() -> Router {
+async fn build_app() -> Router {
     let mock = mock::MockState::new();
     tracing::info!("🔶 Running in MOCK mode (debug build)");
+
+    let auth_state = auth::AuthState::load().await;
 
     let (tx, _rx) = tokio::sync::broadcast::channel::<String>(100);
     let ws_sender = ws::WsSender(tx);
@@ -111,13 +114,21 @@ fn build_app() -> Router {
     Router::new()
         .nest("/api", routes::api_mock(mock))
         .fallback(routes::static_files)
+        .layer(axum::middleware::from_fn({
+            let auth = auth_state.clone();
+            move |req, next| {
+                let auth = auth.clone();
+                async move { auth::require_auth_ext(auth, req, next).await }
+            }
+        }))
+        .layer(axum::Extension(auth_state))
         .layer(axum::Extension(ws_sender))
         .layer(CompressionLayer::new())
         .layer(TraceLayer::new_for_http())
 }
 
 #[cfg(not(debug_assertions))]
-fn build_app() -> Router {
+async fn build_app() -> Router {
     // Auto-start AP if no WiFi is configured
     tokio::spawn(async {
         if !network::is_wifi_configured().await {
@@ -130,6 +141,8 @@ fn build_app() -> Router {
         let _ = network::configure_resolved().await;
     });
 
+    let auth_state = auth::AuthState::load().await;
+
     let (tx, _rx) = tokio::sync::broadcast::channel::<String>(100);
     let ws_sender = ws::WsSender(tx);
 
@@ -137,6 +150,14 @@ fn build_app() -> Router {
         .nest("/api", routes::api())
         .merge(routes::captive_portal_routes())
         .fallback(routes::static_files)
+        .layer(axum::middleware::from_fn({
+            let auth = auth_state.clone();
+            move |req, next| {
+                let auth = auth.clone();
+                async move { auth::require_auth_ext(auth, req, next).await }
+            }
+        }))
+        .layer(axum::Extension(auth_state))
         .layer(axum::Extension(ws_sender))
         .layer(CompressionLayer::new())
         .layer(TraceLayer::new_for_http())

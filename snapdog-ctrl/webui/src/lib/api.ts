@@ -1,8 +1,29 @@
+const TOKEN_KEY = "snapdog_auth_token";
+
+function getToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+function setToken(token: string): void {
+  localStorage.setItem(TOKEN_KEY, token);
+}
+
+function clearToken(): void {
+  localStorage.removeItem(TOKEN_KEY);
+}
+
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(url, {
-    headers: { "Content-Type": "application/json" },
-    ...options,
-  });
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const token = getToken();
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const res = await fetch(url, { headers, ...options });
+  if (res.status === 401) {
+    clearToken();
+    window.dispatchEvent(new Event("snapdog-auth-expired"));
+    throw new Error("Unauthorized");
+  }
   if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
   return res.json();
 }
@@ -161,4 +182,33 @@ export const api = {
   getServerStatus: () => request<ServerStatus>("/api/server/status"),
   enableServer: () => request<void>("/api/server/enable", { method: "POST" }),
   disableServer: () => request<void>("/api/server/disable", { method: "POST" }),
+
+  // Auth
+  getAuthStatus: () => request<AuthStatus>("/api/auth/status"),
+  login: async (password: string): Promise<boolean> => {
+    try {
+      const res = await request<{ token: string }>("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ password }),
+      });
+      setToken(res.token);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+  logout: async (): Promise<void> => {
+    try { await request<void>("/api/auth/logout", { method: "POST" }); } catch { /* ignore */ }
+    clearToken();
+  },
+  setPassword: (current: string | null, newPassword: string | null) =>
+    request<void>("/api/auth/password", {
+      method: "PUT",
+      body: JSON.stringify({ current, new: newPassword }),
+    }),
 };
+
+export interface AuthStatus {
+  enabled: boolean;
+  authenticated: boolean;
+}

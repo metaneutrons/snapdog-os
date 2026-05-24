@@ -6,7 +6,7 @@ use axum::{
     extract::{Query, Request},
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::{get, post, put},
 };
 use rust_embed::Embed;
 use serde::{Deserialize, Serialize};
@@ -52,6 +52,11 @@ pub async fn static_files(req: Request) -> Response {
 pub fn api() -> Router {
     Router::new()
         .route("/ws", get(crate::ws::ws_handler))
+        // Auth
+        .route("/auth/status", get(get_auth_status))
+        .route("/auth/login", post(post_auth_login))
+        .route("/auth/logout", post(post_auth_logout))
+        .route("/auth/password", put(put_auth_password))
         // System
         .route("/system", get(get_system).put(put_system))
         .route("/system/reboot", post(post_reboot))
@@ -97,6 +102,116 @@ async fn api_not_found() -> (StatusCode, Json<serde_json::Value>) {
         StatusCode::NOT_FOUND,
         Json(serde_json::json!({"error": "not found"})),
     )
+}
+
+// --- Auth handlers ---
+
+#[derive(Serialize)]
+struct AuthStatusResponse {
+    enabled: bool,
+    authenticated: bool,
+}
+
+async fn get_auth_status(
+    Extension(auth): Extension<crate::auth::AuthState>,
+    req: Request,
+) -> Json<AuthStatusResponse> {
+    let authenticated = if auth.is_enabled().await {
+        req.headers()
+            .get("authorization")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.strip_prefix("Bearer "))
+            .is_some_and(|t| {
+                // Can't await inside is_some_and, use blocking check
+                auth.0.tokens.try_read().is_ok_and(|set| set.contains(t))
+            })
+    } else {
+        true
+    };
+    Json(AuthStatusResponse {
+        enabled: auth.is_enabled().await,
+        authenticated,
+    })
+}
+
+#[derive(Deserialize)]
+struct LoginRequest {
+    password: String,
+}
+
+#[derive(Serialize)]
+struct LoginResponse {
+    token: String,
+}
+
+async fn post_auth_login(
+    Extension(auth): Extension<crate::auth::AuthState>,
+    Json(body): Json<LoginRequest>,
+) -> Result<Json<LoginResponse>, StatusCode> {
+    if !auth.is_enabled().await {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    if auth.verify_password(&body.password).await {
+        let token = auth.create_token().await;
+        Ok(Json(LoginResponse { token }))
+    } else {
+        Err(StatusCode::UNAUTHORIZED)
+    }
+}
+
+async fn post_auth_logout(
+    Extension(auth): Extension<crate::auth::AuthState>,
+    req: Request,
+) -> StatusCode {
+    if let Some(token) = req
+        .headers()
+        .get("authorization")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+    {
+        auth.revoke_token(token).await;
+    }
+    StatusCode::NO_CONTENT
+}
+
+#[derive(Deserialize)]
+struct SetPasswordRequest {
+    /// Current password (required when changing, not when setting for first time).
+    current: Option<String>,
+    /// New password. Empty string or null disables auth.
+    new: Option<String>,
+}
+
+async fn put_auth_password(
+    Extension(auth): Extension<crate::auth::AuthState>,
+    Json(body): Json<SetPasswordRequest>,
+) -> Result<StatusCode, StatusCode> {
+    // If auth is already enabled, require current password
+    if auth.is_enabled().await {
+        let current = body.current.as_deref().unwrap_or("");
+        if !auth.verify_password(current).await {
+            return Err(StatusCode::UNAUTHORIZED);
+        }
+    }
+
+    match body.new.as_deref() {
+        Some(pw) if !pw.is_empty() => {
+            auth.set_password(pw).await.map_err(|e| {
+                tracing::error!("failed to set password: {e}");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+            // Revoke all existing tokens (force re-login)
+            auth.revoke_all().await;
+        }
+        _ => {
+            auth.remove_password().await.map_err(|e| {
+                tracing::error!("failed to remove password: {e}");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+        }
+    }
+
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// Captive portal detection routes — redirect all OS probes to the setup UI.

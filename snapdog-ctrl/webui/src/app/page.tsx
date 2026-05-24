@@ -1795,16 +1795,15 @@ export default function Page() {
   const [password, setPassword] = useState("");
   const passwordId = useId();
 
-  const checkAuth = useCallback(async () => {
-    try {
-      const status: AuthStatus = await api.getAuthStatus();
-      setAuthState(!status.enabled || status.authenticated ? "ready" : "login");
-    } catch {
-      setAuthState("ready");
-    }
+  useEffect(() => {
+    let cancelled = false;
+    api.getAuthStatus().then((status) => {
+      if (!cancelled) setAuthState(!status.enabled || status.authenticated ? "ready" : "login");
+    }).catch(() => {
+      if (!cancelled) setAuthState("ready");
+    });
+    return () => { cancelled = true; };
   }, []);
-
-  useEffect(() => { checkAuth(); }, [checkAuth]);
 
   useEffect(() => {
     const handler = () => setAuthState("login");

@@ -54,6 +54,9 @@ jobs:
       - name: Format
         run: cd snapdog-ctrl && cargo fmt --check
 
+      - name: Install system deps
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libavahi-compat-libdnssd-dev
+
       - name: Clippy
         run: cd snapdog-ctrl && cargo clippy --locked --all-targets
 

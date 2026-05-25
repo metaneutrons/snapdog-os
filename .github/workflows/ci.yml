@@ -137,16 +137,17 @@ jobs:
       - name: Validate release config
         run: |
           ruby -e 'require "json"; JSON.parse(File.read("release-please-config.json")); JSON.parse(File.read(".release-please-manifest.json"))'
-          test -x buildroot/package/snapdog-updater/update
-          test -x buildroot/package/snapdog-updater/extract-update
           test -x buildroot/board/raspberrypi/post-image-ab.sh
-          grep -q 'BR2_ROOTFS_POST_IMAGE_SCRIPT="../snapdog-os/buildroot/board/raspberrypi/post-image-ab.sh"' buildroot/configs/override.conf
+          test -f buildroot/keys/rauc-ca.cert.pem
+          test -f buildroot/package/snapdog-rauc/system.conf.in
+          test -x buildroot/package/snapdog-rauc/boot-handler.sh
+          test -x buildroot/rauc/create-bundle.sh
           grep -q 'partition rootfsA' buildroot/board/raspberrypi/genimage-ab.cfg.in
           grep -q 'partition rootfsB' buildroot/board/raspberrypi/genimage-ab.cfg.in
-          openssl pkey -pubin -in buildroot/keys/update-signing.pub.pem -noout
+          openssl x509 -in buildroot/keys/rauc-ca.cert.pem -noout
 
       - name: Shell syntax
         run: |
-          sh -n buildroot/package/snapdog-updater/update
-          sh -n buildroot/package/snapdog-updater/extract-update
           bash -n buildroot/board/raspberrypi/post-image-ab.sh
+          bash -n buildroot/rauc/create-bundle.sh
+          sh -n buildroot/package/snapdog-rauc/boot-handler.sh

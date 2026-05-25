@@ -53,6 +53,20 @@ async fn run_cycle() -> anyhow::Result<()> {
     tracing::info!("auto-update: installing from {url}");
     rauc_install(&url).await?;
 
+    // Wait for RAUC to finish, then reboot
+    loop {
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        if rauc_operation().await.unwrap_or_default() == "idle" {
+            break;
+        }
+    }
+
+    tracing::info!("auto-update: install complete, rebooting");
+    let _ = tokio::process::Command::new("systemctl")
+        .arg("reboot")
+        .status()
+        .await;
+
     Ok(())
 }
 

@@ -164,6 +164,16 @@ CONFIG_CRYPTO_SHA256=y
 - `buildroot/package/snapdog-updater/` — entire package
 - Custom boot-guard, extract-update, reactivate-previous-release scripts
 
+## GitHub Secrets Required
+
+| Secret | Purpose |
+|--------|---------|
+| `RAUC_CA_KEY_PEM` | X.509 private key (PEM) for signing RAUC bundles |
+| `R2_ACCESS_KEY_ID` | Cloudflare R2 access (existing) |
+| `R2_SECRET_ACCESS_KEY` | Cloudflare R2 secret (existing) |
+| `R2_ENDPOINT_URL` | Cloudflare R2 endpoint (existing) |
+| `SNAPDOG_UPDATE_SIGNING_KEY_PEM` | Ed25519 key for metadata JSON signing (existing) |
+
 ## Migration Path
 
 1. First release with RAUC: include both old updater AND RAUC

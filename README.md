@@ -16,6 +16,14 @@
 
 ---
 
+> [!WARNING]
+> **Alpha — not ready for production use.**
+> SnapDog OS is under active development and has not been sufficiently tested on real hardware. Do not deploy it on devices you rely on.
+>
+> For a working multiroom audio setup today, use **Raspberry Pi OS** with the [SnapDog `.deb` package](https://github.com/metaneutrons/snapdog/releases) from [metaneutrons/snapdog](https://github.com/metaneutrons/snapdog).
+
+---
+
 SnapDog OS turns a Raspberry Pi with an I2S DAC into a dedicated network audio receiver for the [**SnapDog**](https://github.com/metaneutrons/snapdog) multiroom audio system. It boots in seconds, connects to your SnapDog server automatically via mDNS, and is fully configurable through a web browser — no SSH, no command line, no manual setup required.
 
 ## Features

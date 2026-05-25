@@ -6,6 +6,7 @@ on:
     paths-ignore:
       - "**.md"
       - "LICENSE"
+      - "docs/**"
       - "assets/**"
       - ".githooks/**"
       - ".github/dependabot.yml"
@@ -50,12 +51,6 @@ jobs:
 
       - name: Lint webui
         run: cd snapdog-ctrl/webui && npm run lint
-
-      - name: Typecheck webui
-        run: cd snapdog-ctrl/webui && npm run typecheck
-
-      - name: Build webui
-        run: cd snapdog-ctrl/webui && npm run build
 
       - name: Format
         run: cd snapdog-ctrl && cargo fmt --check

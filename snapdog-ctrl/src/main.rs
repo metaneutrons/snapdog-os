@@ -131,16 +131,29 @@ async fn build_app() -> Router {
 
 #[cfg(not(debug_assertions))]
 async fn build_app() -> Router {
-    // Auto-start AP if no WiFi is configured
+    // Start setup AP only if no network interface is configured
     tokio::spawn(async {
-        if !network::is_wifi_configured().await {
-            tracing::info!("No WiFi configured — starting temporary AP (SSID: SnapDog-Setup)");
+        let _ = network::configure_resolved().await;
+
+        let wifi_configured = network::is_wifi_configured().await;
+        let eth_has_link = has_network_link().await;
+
+        if !wifi_configured && !eth_has_link {
+            tracing::info!("No network configured — starting setup AP (SSID: SnapDog-Setup)");
             if let Err(e) = network::start_ap().await {
                 tracing::error!("Failed to start AP: {e}");
+                return;
+            }
+            // Auto-close AP when a network interface comes up
+            loop {
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                if network::is_wifi_configured().await || has_network_link().await {
+                    tracing::info!("Network connected — stopping setup AP");
+                    let _ = network::stop_ap().await;
+                    break;
+                }
             }
         }
-        // Configure resolved
-        let _ = network::configure_resolved().await;
     });
 
     // Start auto-update scheduler
@@ -166,4 +179,18 @@ async fn build_app() -> Router {
         .layer(axum::Extension(ws_sender))
         .layer(CompressionLayer::new())
         .layer(TraceLayer::new_for_http())
+}
+
+/// Check if any ethernet interface has carrier (link detected).
+#[cfg(not(debug_assertions))]
+async fn has_network_link() -> bool {
+    for iface in &["eth0", "end0"] {
+        let path = format!("/sys/class/net/{iface}/carrier");
+        if let Ok(val) = tokio::fs::read_to_string(&path).await {
+            if val.trim() == "1" {
+                return true;
+            }
+        }
+    }
+    false
 }

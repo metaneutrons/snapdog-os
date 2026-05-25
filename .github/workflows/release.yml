@@ -3,6 +3,13 @@ name: Release
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "README.md"
+      - "API.md"
+      - "LICENSE"
+      - "assets/**"
+      - ".githooks/**"
+      - ".github/dependabot.yml"
 
 permissions:
   contents: read

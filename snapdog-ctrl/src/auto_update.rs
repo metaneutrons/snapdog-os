@@ -42,7 +42,7 @@ async fn run_cycle() -> anyhow::Result<()> {
     }
 
     // Construct bundle URL
-    let board = detect_board();
+    let board = crate::system::detect_board();
     let suffix = if config.channel == "stable" {
         ""
     } else {
@@ -87,16 +87,4 @@ fn chrono_now() -> u64 {
         .unwrap_or_default()
         .as_secs();
     (secs / 60) % (24 * 60)
-}
-
-fn detect_board() -> &'static str {
-    // Read from /etc/rauc/system.conf compatible field
-    let content = std::fs::read_to_string("/etc/rauc/system.conf").unwrap_or_default();
-    if content.contains("pi5") {
-        "pi5"
-    } else if content.contains("pi3") {
-        "pi3"
-    } else {
-        "pi4"
-    }
 }

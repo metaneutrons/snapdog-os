@@ -272,11 +272,9 @@ mod mock_handlers {
     pub async fn get_update_check() -> Json<UpdateCheckResponse> {
         Json(UpdateCheckResponse {
             available: true,
-            installable: true,
             current_version: "0.1.0".into(),
-            latest_version: "0.2.0".into(),
             channel: "stable".into(),
-            is_downgrade: false,
+            bundle_url: "https://update.snapdog.cc/os/bundles/pi4.raucb".into(),
         })
     }
     pub async fn update_upload(
@@ -309,9 +307,10 @@ mod mock_handlers {
     }
     pub async fn get_update_status() -> Json<UpdateStatus> {
         Json(UpdateStatus {
-            phase: "idle".into(),
+            operation: "idle".into(),
             progress: None,
-            rolled_back: false,
+            last_error: String::new(),
+            slots: vec![],
         })
     }
     pub async fn factory_reset(State(_m): State<crate::mock::MockState>) -> StatusCode {
@@ -585,26 +584,45 @@ async fn post_reboot() -> StatusCode {
 #[derive(Serialize)]
 pub struct UpdateCheckResponse {
     pub available: bool,
-    pub installable: bool,
     pub current_version: String,
-    pub latest_version: String,
     pub channel: String,
-    pub is_downgrade: bool,
+    pub bundle_url: String,
 }
 
 #[derive(Serialize)]
 pub struct UpdateStatus {
-    pub phase: String,
-    pub progress: Option<u8>,
-    pub rolled_back: bool,
+    pub operation: String,
+    pub progress: Option<crate::rauc::InstallProgress>,
+    pub last_error: String,
+    pub slots: Vec<crate::rauc::SlotStatus>,
 }
 
 async fn get_update_check() -> Json<UpdateCheckResponse> {
     Json(system::check_update().await)
 }
 
-async fn get_update_status() -> Json<UpdateStatus> {
-    Json(system::get_update_status().await)
+async fn get_update_status() -> Result<Json<UpdateStatus>, StatusCode> {
+    let operation = system::rauc_operation()
+        .await
+        .unwrap_or_else(|_| "unknown".into());
+    let progress = if operation == "installing" {
+        system::rauc_progress().await.ok()
+    } else {
+        None
+    };
+    let last_error = crate::rauc::Rauc::connect()
+        .await
+        .ok()
+        .and_then(|r| futures_util::FutureExt::now_or_never(r.last_error()))
+        .and_then(Result::ok)
+        .unwrap_or_default();
+    let slots = system::rauc_slot_status().await.unwrap_or_default();
+    Ok(Json(UpdateStatus {
+        operation,
+        progress,
+        last_error,
+        slots,
+    }))
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -627,7 +645,10 @@ async fn put_auto_update(Json(body): Json<AutoUpdateConfig>) -> StatusCode {
 }
 
 async fn post_update() -> StatusCode {
-    if let Err(e) = system::trigger_update().await {
+    // Install from the channel's bundle URL
+    let config = system::get_auto_update().await;
+    let url = system::bundle_url(&config.channel);
+    if let Err(e) = system::rauc_install(&url).await {
         tracing::error!("post_update: {e}");
         return StatusCode::INTERNAL_SERVER_ERROR;
     }
@@ -637,16 +658,13 @@ async fn post_update() -> StatusCode {
 async fn post_update_upload(
     mut multipart: axum::extract::Multipart,
 ) -> Result<StatusCode, StatusCode> {
-    let dest = "/data/updater.tar.gz";
-    if let Some(parent) = std::path::Path::new(dest).parent() {
-        let _ = tokio::fs::create_dir_all(parent).await;
-    }
+    let dest = "/tmp/update.raucb";
     let _ = tokio::fs::remove_file(dest).await;
 
     let mut file = match tokio::fs::File::create(dest).await {
         Ok(f) => f,
         Err(e) => {
-            tracing::error!("Failed to create destination update file: {e}");
+            tracing::error!("Failed to create {dest}: {e}");
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     };
@@ -665,7 +683,8 @@ async fn post_update_upload(
 }
 
 async fn post_update_install() -> StatusCode {
-    if let Err(e) = system::trigger_manual_install().await {
+    // Install the uploaded bundle
+    if let Err(e) = system::rauc_install("/tmp/update.raucb").await {
         tracing::error!("post_update_install: {e}");
         return StatusCode::INTERNAL_SERVER_ERROR;
     }

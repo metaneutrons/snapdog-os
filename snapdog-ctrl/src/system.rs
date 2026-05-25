@@ -3,15 +3,12 @@
 
 //! System operations — reads/writes config files, calls systemctl, etc.
 
-use std::cmp::Ordering;
-
 use anyhow::{Context, Result};
-use serde::Deserialize;
 
 use crate::routes::{
     AudioInfo, AutoUpdateConfig, ClientConfig, ComponentVersions, DacOverlay, EthernetConfig,
     EthernetInfo, LogsResponse, NetworkOverview, ScanServersResponse, SshConfig, SystemInfo,
-    TimezoneInfo, UpdateCheckResponse, UpdateStatus, WifiInfo, WifiNetwork, WifiScanResult,
+    TimezoneInfo, UpdateCheckResponse, WifiInfo, WifiNetwork, WifiScanResult,
 };
 
 // --- System ---
@@ -88,19 +85,6 @@ pub async fn reboot() {
     let _ = run_cmd("systemctl", &["reboot"]).await;
 }
 
-pub async fn trigger_update() -> Result<()> {
-    let _rauc = crate::rauc::Rauc::connect().await?;
-    // Download metadata, get bundle URL, then install via RAUC
-    // For now, this is a placeholder — full implementation needs metadata fetch
-    anyhow::bail!("Use /api/system/update/install with a bundle path or URL")
-}
-
-pub async fn trigger_manual_install() -> Result<()> {
-    let rauc = crate::rauc::Rauc::connect().await?;
-    rauc.install("/tmp/update.raucb").await?;
-    Ok(())
-}
-
 /// Install a RAUC bundle from a local path or URL.
 pub async fn rauc_install(source: &str) -> Result<()> {
     let rauc = crate::rauc::Rauc::connect().await?;
@@ -109,7 +93,6 @@ pub async fn rauc_install(source: &str) -> Result<()> {
 }
 
 /// Get RAUC installation progress.
-#[allow(dead_code)]
 pub async fn rauc_progress() -> Result<crate::rauc::InstallProgress> {
     crate::rauc::Rauc::connect().await?.progress().await
 }
@@ -120,7 +103,6 @@ pub async fn rauc_operation() -> Result<String> {
 }
 
 /// Get RAUC slot status.
-#[allow(dead_code)]
 pub async fn rauc_slot_status() -> Result<Vec<crate::rauc::SlotStatus>> {
     crate::rauc::Rauc::connect().await?.slot_status().await
 }
@@ -550,9 +532,27 @@ pub async fn set_ssh(config: SshConfig) -> Result<()> {
     Ok(())
 }
 
-// --- OTA Update Check ---
+// --- OTA Update (RAUC) ---
 
-const UPDATE_BASE_URL: &str = "https://update.snapdog.cc/os";
+const UPDATE_BASE_URL: &str = "https://update.snapdog.cc/os/bundles";
+
+/// Construct the bundle URL for a given channel.
+pub fn bundle_url(channel: &str) -> String {
+    let board = detect_board();
+    let suffix = if channel == "stable" { "" } else { "-beta" };
+    format!("{UPDATE_BASE_URL}/{board}{suffix}.raucb")
+}
+
+pub fn detect_board() -> &'static str {
+    let content = std::fs::read_to_string("/etc/rauc/system.conf").unwrap_or_default();
+    if content.contains("pi5") {
+        "pi5"
+    } else if content.contains("pi3") {
+        "pi3"
+    } else {
+        "pi4"
+    }
+}
 
 pub async fn check_update() -> UpdateCheckResponse {
     let current = read_file("/etc/snapdog-os.version")
@@ -560,206 +560,19 @@ pub async fn check_update() -> UpdateCheckResponse {
         .unwrap_or_default()
         .trim()
         .to_string();
-    let channel = read_file("/etc/snapdog-os.channel")
-        .await
-        .unwrap_or_else(|_| "stable".into())
-        .trim()
-        .to_string();
-    let pi_version = read_file("/etc/raspberrypi.version")
-        .await
-        .unwrap_or_else(|_| "4".into())
-        .trim()
-        .to_string();
-
-    let url = format!("{UPDATE_BASE_URL}/metadata/{channel}/pi{pi_version}.json");
-
-    let latest_res = fetch_latest_version(&url).await;
-    let latest = latest_res.unwrap_or_default();
-    let available = !latest.is_empty() && semver_gt(&latest, &current);
-    let is_downgrade = !latest.is_empty() && semver_gt(&current, &latest);
-    let installable = !latest.is_empty() && latest != current;
+    let config = get_auto_update().await;
+    let url = bundle_url(&config.channel);
 
     UpdateCheckResponse {
-        available,
-        installable,
-        current_version: current,
-        latest_version: latest,
-        channel,
-        is_downgrade,
+        available: false, // TODO: HEAD request to check if bundle changed
+        current_version: if current.is_empty() {
+            "unknown".into()
+        } else {
+            current
+        },
+        channel: config.channel,
+        bundle_url: url,
     }
-}
-
-fn semver_gt(a: &str, b: &str) -> bool {
-    compare_versions(a, b) == Ordering::Greater
-}
-
-fn compare_versions(a: &str, b: &str) -> Ordering {
-    let a = ParsedVersion::parse(a);
-    let b = ParsedVersion::parse(b);
-
-    a.major
-        .cmp(&b.major)
-        .then(a.minor.cmp(&b.minor))
-        .then(a.patch.cmp(&b.patch))
-        .then_with(|| compare_prerelease(a.prerelease.as_deref(), b.prerelease.as_deref()))
-}
-
-#[derive(Debug)]
-struct ParsedVersion {
-    major: u64,
-    minor: u64,
-    patch: u64,
-    prerelease: Option<String>,
-}
-
-impl ParsedVersion {
-    fn parse(input: &str) -> Self {
-        let trimmed = input.trim().trim_start_matches('v');
-        let (core, prerelease) = trimmed
-            .split_once('-')
-            .map_or((trimmed, None), |(core, pre)| (core, Some(pre.to_string())));
-        let mut parts = core.split('.');
-
-        Self {
-            major: parts.next().and_then(|p| p.parse().ok()).unwrap_or(0),
-            minor: parts.next().and_then(|p| p.parse().ok()).unwrap_or(0),
-            patch: parts.next().and_then(|p| p.parse().ok()).unwrap_or(0),
-            prerelease,
-        }
-    }
-}
-
-fn compare_prerelease(a: Option<&str>, b: Option<&str>) -> Ordering {
-    match (a, b) {
-        (None, None) => Ordering::Equal,
-        (None, Some(_)) => Ordering::Greater,
-        (Some(_), None) => Ordering::Less,
-        (Some(a), Some(b)) => compare_prerelease_identifiers(a, b),
-    }
-}
-
-fn compare_prerelease_identifiers(a: &str, b: &str) -> Ordering {
-    let mut a_parts = a.split('.');
-    let mut b_parts = b.split('.');
-
-    loop {
-        match (a_parts.next(), b_parts.next()) {
-            (None, None) => return Ordering::Equal,
-            (None, Some(_)) => return Ordering::Less,
-            (Some(_), None) => return Ordering::Greater,
-            (Some(a), Some(b)) => {
-                let ordering = compare_prerelease_identifier(a, b);
-                if ordering != Ordering::Equal {
-                    return ordering;
-                }
-            }
-        }
-    }
-}
-
-fn compare_prerelease_identifier(a: &str, b: &str) -> Ordering {
-    match (a.parse::<u64>(), b.parse::<u64>()) {
-        (Ok(a), Ok(b)) => a.cmp(&b),
-        (Ok(_), Err(_)) => Ordering::Less,
-        (Err(_), Ok(_)) => Ordering::Greater,
-        (Err(_), Err(_)) => a.cmp(b),
-    }
-}
-
-pub async fn get_update_status() -> UpdateStatus {
-    // Check if update is in progress (updater.tar.gz exists)
-    let downloading = tokio::fs::metadata("/data/updater.tar.gz").await.is_ok();
-    // Check if we rolled back (previous version file exists and matches current)
-    let rolled_back = tokio::fs::read_to_string("/etc/snapdog-os.version.previous")
-        .await
-        .ok()
-        .and_then(|prev| {
-            let current = std::fs::read_to_string("/etc/snapdog-os.version").unwrap_or_default();
-            // If previous > current, we rolled back
-            if semver_gt(prev.trim(), current.trim()) {
-                Some(true)
-            } else {
-                None
-            }
-        })
-        .unwrap_or(false);
-
-    let phase = if downloading {
-        "installing".to_string()
-    } else {
-        "idle".to_string()
-    };
-
-    UpdateStatus {
-        phase,
-        progress: None,
-        rolled_back,
-    }
-}
-
-async fn fetch_latest_version(url: &str) -> Result<String> {
-    #[derive(Deserialize)]
-    struct UpdateMetadata {
-        #[serde(default)]
-        version: String,
-    }
-
-    const PUBKEY: &str = "/etc/snapdog-os-update.pub.pem";
-
-    let temp_dir = std::env::temp_dir();
-    let pid = std::process::id();
-    let metadata_path = temp_dir.join(format!("snapdog-update-{pid}.json"));
-    let signature_path = temp_dir.join(format!("snapdog-update-{pid}.json.sig"));
-    let metadata_arg = metadata_path.to_string_lossy().to_string();
-    let signature_arg = signature_path.to_string_lossy().to_string();
-    let sig_url = format!("{url}.sig");
-
-    let output = tokio::process::Command::new("curl")
-        .args(["-sf", "-m", "10", "-o", &metadata_arg, url])
-        .output()
-        .await?;
-
-    if !output.status.success() {
-        anyhow::bail!("failed to fetch update metadata");
-    }
-
-    let output = tokio::process::Command::new("curl")
-        .args(["-sf", "-m", "10", "-o", &signature_arg, &sig_url])
-        .output()
-        .await?;
-
-    if !output.status.success() {
-        let _ = tokio::fs::remove_file(&metadata_path).await;
-        anyhow::bail!("failed to fetch update metadata signature");
-    }
-
-    let output = tokio::process::Command::new("openssl")
-        .args([
-            "dgst",
-            "-sha256",
-            "-verify",
-            PUBKEY,
-            "-signature",
-            &signature_arg,
-            &metadata_arg,
-        ])
-        .output()
-        .await?;
-
-    if !output.status.success() {
-        let _ = tokio::fs::remove_file(&metadata_path).await;
-        let _ = tokio::fs::remove_file(&signature_path).await;
-        anyhow::bail!("failed to verify update metadata signature");
-    }
-
-    let metadata_bytes = tokio::fs::read(&metadata_path).await?;
-    let _ = tokio::fs::remove_file(&metadata_path).await;
-    let _ = tokio::fs::remove_file(&signature_path).await;
-
-    let metadata: UpdateMetadata =
-        serde_json::from_slice(&metadata_bytes).context("failed to parse update metadata")?;
-
-    Ok(metadata.version)
 }
 
 // --- Factory Reset ---
@@ -1094,15 +907,6 @@ mod tests {
         assert!(validate_client_arg("server_url", "tcp://192.168.1.10:1704").is_ok());
         assert!(validate_client_arg("host_id", "kitchen").is_ok());
         assert!(validate_client_arg("soundcard", "hw:0").is_ok());
-    }
-
-    #[test]
-    fn compares_stable_and_beta_versions() {
-        assert!(semver_gt("0.1.0-beta.13", "0.1.0-beta.12"));
-        assert!(semver_gt("0.1.0", "0.1.0-beta.12"));
-        assert!(semver_gt("0.2.0-beta.1", "0.1.9"));
-        assert!(!semver_gt("0.1.0-beta.12", "0.1.0"));
-        assert!(!semver_gt("0.1.0-beta.12", "0.1.0-beta.13"));
     }
 
     #[test]

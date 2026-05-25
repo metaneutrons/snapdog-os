@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Fabian Schmieder
 
 mod auth;
+#[cfg(not(debug_assertions))]
 mod auto_update;
 mod config_txt;
 mod mdns;

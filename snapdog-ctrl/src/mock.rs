@@ -205,6 +205,7 @@ impl MockState {
         AudioInfo {
             overlay: s.overlay.clone(),
             detected_card: "Mock Allo Boss DAC".into(),
+            detected_hat: "hifiberry-dacplus".into(),
             soundcard: "hw:0".into(),
             available_overlays: AVAILABLE_OVERLAYS
                 .iter()
@@ -257,9 +258,10 @@ impl MockState {
 }
 
 const AVAILABLE_OVERLAYS: &[(&str, &str)] = &[
-    ("allo-boss-dac-pcm512x-audio", "Allo Boss DAC"),
-    ("iqaudio-dacplus", "IQAudio DAC+"),
-    ("justboom-dac", "JustBoom DAC"),
-    ("max98357a", "MAX98357A (Adafruit, Google AIY)"),
     ("", "Auto-detect (HAT EEPROM)"),
+    ("hifiberry-dacplus", "HiFiBerry DAC+/Amp2/Amp4"),
+    ("hifiberry-dacplushd", "HiFiBerry DAC2 HD"),
+    ("iqaudio-dacplus", "Raspberry Pi DAC+ / DAC Pro"),
+    ("justboom-dac", "JustBoom DAC/Amp HAT"),
+    ("vc4-kms-v3d", "HDMI Audio"),
 ];

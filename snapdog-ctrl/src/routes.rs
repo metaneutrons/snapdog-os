@@ -835,6 +835,7 @@ async fn post_wifi_scan() -> Json<WifiScanResult> {
 pub struct AudioInfo {
     pub overlay: String,
     pub detected_card: String,
+    pub detected_hat: String,
     pub soundcard: String,
     pub available_overlays: Vec<DacOverlay>,
 }

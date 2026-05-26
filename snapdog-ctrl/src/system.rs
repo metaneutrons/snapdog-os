@@ -403,27 +403,56 @@ fn prefix_to_subnet(prefix: u8) -> String {
 // --- Audio ---
 
 const AVAILABLE_OVERLAYS: &[(&str, &str)] = &[
+    ("", "Auto-detect (HAT EEPROM)"),
+    ("hifiberry-dacplus", "HiFiBerry DAC+/Amp2/Amp4"),
+    ("hifiberry-dacplushd", "HiFiBerry DAC2 HD"),
+    ("hifiberry-dacplusdsp", "HiFiBerry DAC+ DSP"),
+    ("hifiberry-digi", "HiFiBerry Digi+"),
+    ("iqaudio-dacplus", "Raspberry Pi DAC+ / DAC Pro / DigiAMP+"),
+    ("iqaudio-codec", "Raspberry Pi Codec Zero"),
+    ("justboom-dac", "JustBoom DAC/Amp HAT"),
+    ("justboom-digi", "JustBoom Digi HAT"),
     ("allo-boss-dac-pcm512x-audio", "Allo Boss DAC"),
-    ("iqaudio-dacplus", "IQAudio DAC+"),
-    ("justboom-dac", "JustBoom DAC"),
     ("max98357a", "MAX98357A (Adafruit, Google AIY)"),
     ("googlevoicehat-soundcard", "Google AIY Voice HAT"),
-    ("", "Auto-detect (HAT EEPROM)"),
+    ("vc4-kms-v3d", "HDMI Audio"),
 ];
+
+/// Detect DAC from HAT EEPROM product string.
+async fn detect_hat_overlay() -> Option<&'static str> {
+    let product = read_file("/proc/device-tree/hat/product").await.ok()?;
+    let product = product.trim();
+
+    Some(match product {
+        p if p.contains("DAC2 HD") => "hifiberry-dacplushd",
+        p if p.contains("DAC+ DSP") || p.contains("DAC+DSP") => "hifiberry-dacplusdsp",
+        p if p.contains("Digi") && p.contains("HiFiBerry") => "hifiberry-digi",
+        p if p.contains("HiFiBerry") => "hifiberry-dacplus",
+        p if p.contains("DigiAMP") || p.contains("IQaudIO") || p.contains("IQaudio") => {
+            "iqaudio-dacplus"
+        }
+        p if p.contains("Codec Zero") => "iqaudio-codec",
+        p if p.contains("JustBoom") && p.contains("Digi") => "justboom-digi",
+        p if p.contains("JustBoom") => "justboom-dac",
+        _ => return None,
+    })
+}
 
 pub async fn get_audio() -> AudioInfo {
     let overlay = crate::config_txt::get_audio_overlay()
         .await
         .unwrap_or_default();
-    let detected = read_file("/proc/asound/card0/id")
+    let detected_card = read_file("/proc/asound/card0/id")
         .await
         .unwrap_or_default()
         .trim()
         .to_string();
+    let detected_hat = detect_hat_overlay().await;
 
     AudioInfo {
         overlay,
-        detected_card: detected,
+        detected_card,
+        detected_hat: detected_hat.unwrap_or_default().to_string(),
         soundcard: "hw:0".into(),
         available_overlays: AVAILABLE_OVERLAYS
             .iter()

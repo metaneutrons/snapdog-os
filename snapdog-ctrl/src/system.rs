@@ -519,11 +519,7 @@ pub async fn get_ssh() -> SshConfig {
 }
 
 pub async fn set_ssh(config: SshConfig) -> Result<()> {
-    if config.enabled {
-        run_cmd("systemctl", &["enable", "--now", "sshd"]).await?;
-    } else {
-        run_cmd("systemctl", &["disable", "--now", "sshd"]).await?;
-    }
+    set_service("ssh", config.enabled).await?;
 
     tokio::fs::create_dir_all("/root/.ssh").await?;
     let keys = config.pubkeys.join("\n") + "\n";
@@ -591,7 +587,7 @@ pub async fn factory_reset() -> Result<()> {
     let _ = tokio::fs::remove_file("/data/snapdog/snapdog.toml").await;
 
     // Disable SSH and remove authorized keys
-    let _ = run_cmd("systemctl", &["disable", "--now", "sshd"]).await;
+    let _ = set_service("ssh", false).await;
     let _ = tokio::fs::remove_file("/data/ssh/authorized_keys").await;
 
     // Reset hostname immediately

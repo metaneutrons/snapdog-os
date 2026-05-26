@@ -987,7 +987,8 @@ async fn put_server(
 }
 
 async fn get_server_status() -> Json<ServerStatus> {
-    let enabled = run_systemctl(&["is-enabled", "snapdog"]).await.is_ok();
+    let config = system::get_service_config().await;
+    let enabled = config.get("server").copied().unwrap_or(false);
     let running = run_systemctl(&["is-active", "snapdog"]).await.is_ok();
     Json(ServerStatus { enabled, running })
 }
@@ -1007,7 +1008,7 @@ async fn post_server_enable(
             return StatusCode::INTERNAL_SERVER_ERROR;
         }
     }
-    if let Err(e) = run_systemctl(&["enable", "--now", "snapdog"]).await {
+    if let Err(e) = system::set_service("server", true).await {
         tracing::error!("post_server_enable: {e}");
         return StatusCode::INTERNAL_SERVER_ERROR;
     }
@@ -1018,7 +1019,7 @@ async fn post_server_enable(
 async fn post_server_disable(
     Extension(crate::ws::WsSender(tx)): Extension<crate::ws::WsSender>,
 ) -> StatusCode {
-    if let Err(e) = run_systemctl(&["disable", "--now", "snapdog"]).await {
+    if let Err(e) = system::set_service("server", false).await {
         tracing::error!("post_server_disable: {e}");
         return StatusCode::INTERNAL_SERVER_ERROR;
     }

@@ -81,20 +81,79 @@ sudo dd if=snapdog-os-pi4-0.1.0.img of=/dev/sdX bs=4M status=progress conv=fsync
 ┌─────────────────────────────────────┐
 │  snapdog-ctrl (port 80)             │
 │  Device configuration web UI        │
+│  Service manager, OTA orchestrator  │
 ├─────────────────────────────────────┤
-│  snapdog-client                     │
-│  Snapcast audio receiver            │
+│  snapdog-client / snapdog-server    │
+│  Snapcast audio (managed by ctrl)   │
+├─────────────────────────────────────┤
+│  RAUC │ A/B OTA with auto-rollback  │
 ├─────────────────────────────────────┤
 │  ALSA → I2S DAC/AMP                 │
-│  Hardware audio output              │
 ├─────────────────────────────────────┤
 │  Linux 6.6 LTS (aarch64) + systemd  │
-│  Raspberry Pi kernel                │
 ├─────────────────────────────────────┤
-│  Buildroot 2025.02 LTS              │
-│  Minimal userspace (~21 packages)   │
+│  Buildroot 2025.02                   │
 └─────────────────────────────────────┘
 ```
+
+### Partition Layout
+
+| # | Name | Size | Type | Purpose |
+|---|------|------|------|---------|
+| 1 | boot | 256MB | vfat (ro) | Firmware, kernel, DTBs, config.txt |
+| 2 | rootfsA | 1GB | ext4 (ro) | Root filesystem (slot A) |
+| 3 | rootfsB | 1GB | ext4 (ro) | Root filesystem (slot B) |
+| 4 | data | 128MB+ | ext4 (rw) | Persistent config (`/data`) |
+
+### Read-Only Rootfs
+
+The root filesystem is mounted read-only. Mutable state lives on `/data`:
+
+- `/etc/hostname` → `/data/hostname`
+- `/etc/snapdog/snapdog.toml` → `/data/snapdog/snapdog.toml`
+- `/etc/systemd/network` → `/data/systemd/network`
+- `/var/lib` → tmpfs (ephemeral)
+
+### Service Management
+
+`snapdog-ctrl` is the **sole orchestrator** for optional services. No services are enabled in systemd directly — `snapdog-ctrl` starts/stops them at boot based on `/data/snapdog/ctrl.toml`:
+
+```toml
+[services]
+ssh = false       # default: off
+client = true     # default: on
+server = false    # default: off
+
+[auto-update]
+enabled = true
+channel = "stable"
+time = "04:00"
+
+[auth]
+# password_hash = "$2b$12$..."  # optional web UI password
+```
+
+### Boot Flow
+
+1. Bootloader loads kernel from `/boot`
+2. systemd starts `snapdog-data-init` (creates `/data` defaults)
+3. systemd starts `snapdog-ctrl`
+4. `snapdog-ctrl` reads `ctrl.toml` and starts configured services
+5. `snapdog-ctrl` starts SoftAP if no network interface is connected
+6. `rauc-mark-good` marks the current slot as bootable
+
+### OTA Updates (RAUC)
+
+- **Bundle format**: `.raucb` (verity, X.509 signed)
+- **A/B switching**: Custom bootloader backend using RPi `cmdline.txt`
+- **Auto-rollback**: If `snapdog-ctrl` fails to start 3 times → previous slot
+- **Auto-update**: Daily check at configured time, install + reboot
+- **Manual**: Upload `.raucb` via web UI or install from URL
+- **Channels**: `stable` (`pi4.raucb`) / `beta` (`pi4-beta.raucb`)
+
+### SoftAP
+
+Started automatically when no network is available (no WiFi configured AND no Ethernet link). Stops automatically when a network connection is established. SSID: `SnapDog-Setup`.
 
 ## snapdog-ctrl
 
@@ -134,12 +193,13 @@ SNAPDOG_SETUP_PORT=8080 cargo run
 
 | Feature | Detail |
 |---------|--------|
-| Mechanism | Dual-partition A/B |
-| Integrity | OpenSSL-signed metadata + SHA256 archive verification |
-| Rollback | Automatic after 3 failed boot attempts |
+| Framework | [RAUC](https://rauc.io/) |
+| Mechanism | A/B root partitions with atomic switching |
+| Bundle format | `.raucb` (verity, X.509 signed) |
+| Rollback | Automatic if snapdog-ctrl fails to start |
 | Channels | `stable` (tagged releases), `beta` (every push) |
-| Schedule | Configurable: daily/weekly/monthly at chosen time |
-| Server | `update.snapdog.cc/os` (Cloudflare R2) |
+| Auto-update | Daily at configurable time (default 04:00) |
+| Server | `update.snapdog.cc/os/bundles/` (Cloudflare R2) |
 
 ## DAC Support
 

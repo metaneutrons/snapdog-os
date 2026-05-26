@@ -64,3 +64,6 @@ touch "$TARGET_DIR/resize-me"
 mkdir -p "$TARGET_DIR/etc/systemd/system/getty.target.wants"
 ln -sf /usr/lib/systemd/system/serial-getty@.service \
   "$TARGET_DIR/etc/systemd/system/getty.target.wants/serial-getty@ttyGS0.service"
+
+# Mask wait-online (no service needs network-online.target; AP mode is intentionally offline)
+ln -sf /dev/null "$TARGET_DIR/etc/systemd/system/systemd-networkd-wait-online.service"

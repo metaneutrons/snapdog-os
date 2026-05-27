@@ -62,6 +62,7 @@ function Field({ label, htmlFor, children }: { label: string; htmlFor?: string; 
 }
 
 const DEFAULT_SERVER_CONFIG: ServerConfig = {
+  http: { api_keys: [] },
   audio: {
     sample_rate: 44100,
     bit_depth: 16,
@@ -1787,6 +1788,31 @@ function ServerIntegrationsSubTab({ config, setConfig }: { config: ServerConfig;
 
   return (
     <div className="space-y-4">
+      {/* API Keys */}
+      <div className="space-y-2">
+        <span className="text-sm font-medium">{t("apiKeys")}</span>
+        <p className="text-xs text-muted-foreground">Keys required to access the SnapDog server HTTP API.</p>
+        {config.http.api_keys.map((key, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <Input className="flex-1 font-mono text-xs" value={key} onChange={(e) => {
+              const c = structuredClone(config);
+              c.http.api_keys[i] = e.target.value;
+              setConfig(c);
+            }} aria-label={`API Key ${i + 1}`} />
+            <Button variant="ghost" size="sm" onClick={() => {
+              const c = structuredClone(config);
+              c.http.api_keys.splice(i, 1);
+              setConfig(c);
+            }} aria-label="Remove key">✕</Button>
+          </div>
+        ))}
+        <Button variant="outline" size="sm" onClick={() => {
+          const c = structuredClone(config);
+          c.http.api_keys.push("");
+          setConfig(c);
+        }}>+ Add Key</Button>
+      </div>
+
       {/* MQTT */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">

@@ -13,6 +13,7 @@ const CONFIG_BACKUP: &str = "/etc/snapdog/snapdog.toml.bak";
 /// Complete server configuration as exposed via the API.
 #[derive(Serialize, Deserialize, Clone, Default)]
 pub struct ServerConfig {
+    pub http: HttpConfig,
     pub audio: AudioConfig,
     pub snapcast: SnapcastConfig,
     pub subsonic: Option<SubsonicConfig>,
@@ -24,6 +25,11 @@ pub struct ServerConfig {
     pub clients: Vec<ClientEntry>,
     pub radio: Vec<RadioStation>,
     pub system: SystemConfig,
+}
+
+#[derive(Serialize, Deserialize, Clone, Default)]
+pub struct HttpConfig {
+    pub api_keys: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -299,11 +305,21 @@ managed = true
 
 // ── Internal ──────────────────────────────────────────────────
 
+#[allow(clippy::too_many_lines)]
 fn parse_document(doc: &DocumentMut) -> ServerConfig {
     let mut config = ServerConfig::default();
 
     if let Some(system) = doc.get("system").and_then(Item::as_table) {
         config.system.log_level = get_str(system, "log_level", "info");
+    }
+
+    if let Some(http) = doc.get("http").and_then(Item::as_table) {
+        if let Some(keys) = http.get("api_keys").and_then(|v| v.as_array()) {
+            config.http.api_keys = keys
+                .iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect();
+        }
     }
 
     if let Some(audio) = doc.get("audio").and_then(Item::as_table) {
@@ -420,6 +436,17 @@ fn apply_config(doc: &mut DocumentMut, config: &ServerConfig) {
 }
 
 fn apply_config_sections(doc: &mut DocumentMut, config: &ServerConfig) {
+    // HTTP
+    if !config.http.api_keys.is_empty() {
+        let http = doc
+            .entry("http")
+            .or_insert_with(|| Item::Table(toml_edit::Table::new()));
+        let arr: toml_edit::Array = config.http.api_keys.iter().map(String::as_str).collect();
+        http["api_keys"] = toml_edit::value(arr);
+    } else if let Some(http) = doc.get_mut("http").and_then(|t| t.as_table_mut()) {
+        http.remove("api_keys");
+    }
+
     // System
     set_table_str(doc, "system", "log_level", &config.system.log_level);
 

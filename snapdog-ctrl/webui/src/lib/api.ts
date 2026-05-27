@@ -116,6 +116,7 @@ export interface UpdateStatus {
 }
 
 export interface ServerConfig {
+  http: { api_keys: string[] };
   audio: { sample_rate: number; bit_depth: number; channels: number; source_conflict: string; zone_switch_fade_ms: number; source_switch_fade_ms: number };
   snapcast: { streaming_port: number; codec: string; encryption_psk: string | null; group_volume_mode: string; unknown_clients: string; default_zone: string; mdns_name: string };
   subsonic: { url: string; username: string; password: string } | null;

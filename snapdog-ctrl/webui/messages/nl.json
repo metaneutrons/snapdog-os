@@ -218,6 +218,7 @@
     "mac": "MAC-adres",
     "zone": "Zone",
     "addClient": "Client toevoegen",
+    "apiKeys": "API Keys",
     "mqtt": "MQTT",
     "broker": "Broker",
     "baseTopic": "Basis-topic",

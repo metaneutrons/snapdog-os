@@ -81,6 +81,7 @@ export interface DacOverlay {
 export interface AudioConfig {
   overlay: string;
   detected_card: string;
+  detected_hat: string;
   soundcard: string;
   available_overlays: DacOverlay[];
 }

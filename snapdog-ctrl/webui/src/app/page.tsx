@@ -412,7 +412,15 @@ function AudioTab() {
   const cardId = useId();
 
   useEffect(() => {
-    api.getAudio().then(setConfig).catch(() => {});
+    api.getAudio().then((c) => {
+      // Auto-apply detected HAT on first boot (overlay empty = not configured)
+      if (!c.overlay && c.detected_hat) {
+        api.setAudio(c.detected_hat);
+        setConfig({ ...c, overlay: c.detected_hat });
+      } else {
+        setConfig(c);
+      }
+    }).catch(() => {});
   }, []);
 
   useWebSocket("audio_changed", useCallback(() => {
@@ -421,9 +429,25 @@ function AudioTab() {
 
   if (!config) return <Skeleton className="h-32 w-full" aria-label={t("loading")} />;
 
+  const detectedName = config.detected_hat
+    ? config.available_overlays.find((o) => o.id === config.detected_hat)?.name ?? config.detected_hat
+    : null;
+
   return (
     <Card title={t("title")} id={cardId}>
       <div className="space-y-3">
+        {detectedName && config.overlay !== config.detected_hat && (
+          <div className="flex items-center justify-between rounded-lg bg-blue-500/10 px-3 py-2 text-xs text-blue-800 dark:text-blue-300">
+            <span>Detected: <strong>{detectedName}</strong></span>
+            <Button size="xs" variant="outline" onClick={() => {
+              api.setAudio(config.detected_hat);
+              setConfig({ ...config, overlay: config.detected_hat });
+            }}>Apply</Button>
+          </div>
+        )}
+        {detectedName && config.overlay === config.detected_hat && (
+          <p className="text-xs text-green-600">✓ Using detected DAC: {detectedName}</p>
+        )}
         <Field label={t("dacOverlay")} htmlFor={overlayId}>
           <Select
             id={overlayId}
@@ -438,9 +462,11 @@ function AudioTab() {
             ))}
           </Select>
         </Field>
-        <Field label={t("detectedCard")}>
-          <p className="font-mono text-xs text-foreground">{config.detected_card || "—"}</p>
-        </Field>
+        {config.detected_card && (
+          <Field label={t("detectedCard")}>
+            <p className="font-mono text-xs text-foreground">{config.detected_card}</p>
+          </Field>
+        )}
       </div>
     </Card>
   );

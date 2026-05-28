@@ -62,14 +62,15 @@ function Field({ label, htmlFor, children }: { label: string; htmlFor?: string; 
 }
 
 const DEFAULT_SERVER_CONFIG: ServerConfig = {
+  name: "SnapDog",
   http: { api_keys: [] },
   audio: {
-    sample_rate: 44100,
+    sample_rate: 48000,
     bit_depth: 16,
     channels: 2,
     source_conflict: "last_wins",
-    zone_switch_fade_ms: 0,
-    source_switch_fade_ms: 0,
+    zone_switch_fade_ms: 300,
+    source_switch_fade_ms: 300,
   },
   snapcast: {
     streaming_port: 1704,
@@ -77,8 +78,9 @@ const DEFAULT_SERVER_CONFIG: ServerConfig = {
     encryption_psk: null,
     group_volume_mode: "relative",
     unknown_clients: "accept",
-    default_zone: "Default",
+    default_zone: "",
     mdns_name: "SnapDog",
+    advertise_snapcast: false,
   },
   subsonic: null,
   spotify: null,
@@ -1628,7 +1630,7 @@ function ServerSourcesSubTab({ config, setConfig }: { config: ServerConfig; setC
 
   const toggleSubsonic = (on: boolean) => {
     const c = structuredClone(config);
-    c.subsonic = on ? { url: "", username: "", password: "" } : null;
+    c.subsonic = on ? { url: "", username: "", password: "", format: "raw" } : null;
     setConfig(c);
   };
   const toggleSpotify = (on: boolean) => {
@@ -1638,7 +1640,7 @@ function ServerSourcesSubTab({ config, setConfig }: { config: ServerConfig; setC
   };
   const toggleAirplay = (on: boolean) => {
     const c = structuredClone(config);
-    c.airplay = on ? { password: null } : null;
+    c.airplay = on ? { password: null, mode: "airplay2" } : null;
     setConfig(c);
   };
 
@@ -1710,7 +1712,7 @@ function ServerSourcesSubTab({ config, setConfig }: { config: ServerConfig; setC
         </div>
         {config.airplay && (
           <div className="space-y-2 pl-2 border-l-2 border-border">
-            <Field label={t("password")} htmlFor={airPassId}><Input id={airPassId} value={config.airplay.password ?? ""} onChange={(e) => { const c = structuredClone(config); c.airplay = { password: e.target.value || null }; setConfig(c); }} /></Field>
+            <Field label={t("password")} htmlFor={airPassId}><Input id={airPassId} value={config.airplay.password ?? ""} onChange={(e) => { const c = structuredClone(config); c.airplay = { ...c.airplay!, password: e.target.value || null }; setConfig(c); }} /></Field>
           </div>
         )}
       </div>
@@ -1740,9 +1742,9 @@ function ServerZonesSubTab({ config, setConfig }: { config: ServerConfig; setCon
   const removeZone = (i: number) => { const c = structuredClone(config); c.zones.splice(i, 1); setConfig(c); };
   const updateZone = (i: number, key: string, value: string) => { const c = structuredClone(config); (c.zones[i] as Record<string, string>)[key] = value; setConfig(c); };
 
-  const addClient = () => { const c = structuredClone(config); c.clients.push({ name: "", mac: "", zone: config.zones[0]?.name ?? "" }); setConfig(c); };
+  const addClient = () => { const c = structuredClone(config); c.clients.push({ name: "", mac: "", zone: config.zones[0]?.name ?? "", icon: "🔊", max_volume: 100 }); setConfig(c); };
   const removeClient = (i: number) => { const c = structuredClone(config); c.clients.splice(i, 1); setConfig(c); };
-  const updateClient = (i: number, key: string, value: string) => { const c = structuredClone(config); (c.clients[i] as Record<string, string>)[key] = value; setConfig(c); };
+  const updateClient = (i: number, key: string, value: string | number) => { const c = structuredClone(config); (c.clients[i] as Record<string, string | number>)[key] = value; setConfig(c); };
 
   return (
     <div className="space-y-4">

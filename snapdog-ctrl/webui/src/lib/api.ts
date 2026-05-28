@@ -116,16 +116,17 @@ export interface UpdateStatus {
 }
 
 export interface ServerConfig {
+  name: string;
   http: { api_keys: string[] };
   audio: { sample_rate: number; bit_depth: number; channels: number; source_conflict: string; zone_switch_fade_ms: number; source_switch_fade_ms: number };
-  snapcast: { streaming_port: number; codec: string; encryption_psk: string | null; group_volume_mode: string; unknown_clients: string; default_zone: string; mdns_name: string };
-  subsonic: { url: string; username: string; password: string } | null;
+  snapcast: { streaming_port: number; codec: string; encryption_psk: string | null; group_volume_mode: string; unknown_clients: string; default_zone: string; mdns_name: string; advertise_snapcast: boolean };
+  subsonic: { url: string; username: string; password: string; format: string } | null;
   spotify: { name: string; bitrate: number } | null;
-  airplay: { password: string | null } | null;
+  airplay: { password: string | null; mode: string } | null;
   mqtt: { broker: string; username: string | null; password: string | null; base_topic: string } | null;
   knx: { role: string; url: string | null; gos?: { target: string; function: string; ga: string }[] } | null;
   zones: { name: string; icon: string }[];
-  clients: { name: string; mac: string; zone: string }[];
+  clients: { name: string; mac: string; zone: string; icon: string; max_volume: number }[];
   radio: { name: string; url: string; cover: string | null }[];
   system: { log_level: string };
 }

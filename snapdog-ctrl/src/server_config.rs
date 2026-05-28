@@ -13,6 +13,7 @@ const CONFIG_BACKUP: &str = "/etc/snapdog/snapdog.toml.bak";
 /// Complete server configuration as exposed via the API.
 #[derive(Serialize, Deserialize, Clone, Default)]
 pub struct ServerConfig {
+    pub name: String,
     pub http: HttpConfig,
     pub audio: AudioConfig,
     pub snapcast: SnapcastConfig,
@@ -64,6 +65,7 @@ pub struct SnapcastConfig {
     pub unknown_clients: String,
     pub default_zone: String,
     pub mdns_name: String,
+    pub advertise_snapcast: bool,
 }
 
 impl Default for SnapcastConfig {
@@ -76,6 +78,7 @@ impl Default for SnapcastConfig {
             unknown_clients: "accept".into(),
             default_zone: String::new(),
             mdns_name: "SnapDog".into(),
+            advertise_snapcast: false,
         }
     }
 }
@@ -85,6 +88,7 @@ pub struct SubsonicConfig {
     pub url: String,
     pub username: String,
     pub password: String,
+    pub format: String,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -96,6 +100,7 @@ pub struct SpotifyConfig {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct AirplayConfig {
     pub password: Option<String>,
+    pub mode: String,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -138,6 +143,8 @@ pub struct ClientEntry {
     pub name: String,
     pub mac: String,
     pub zone: String,
+    pub icon: String,
+    pub max_volume: u8,
     pub knx: Option<ClientKnxGOs>,
 }
 
@@ -347,12 +354,26 @@ fn parse_document(doc: &DocumentMut) -> ServerConfig {
         config.snapcast.default_zone = get_str(snap, "default_zone", "");
         config.snapcast.mdns_name = get_str(snap, "mdns_name", "SnapDog");
     }
+    if let Some(mdns) = doc.get("mdns").and_then(Item::as_table) {
+        config.snapcast.advertise_snapcast = mdns
+            .get("advertise_snapcast")
+            .and_then(toml_edit::Item::as_bool)
+            .unwrap_or(false);
+    }
+
+    // Top-level name
+    config.name = doc
+        .get("name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("SnapDog")
+        .to_string();
 
     if let Some(sub) = doc.get("subsonic").and_then(Item::as_table) {
         config.subsonic = Some(SubsonicConfig {
             url: get_str(sub, "url", ""),
             username: get_str(sub, "username", ""),
             password: get_str(sub, "password", ""),
+            format: get_str(sub, "format", "raw"),
         });
     }
 
@@ -369,6 +390,7 @@ fn parse_document(doc: &DocumentMut) -> ServerConfig {
                 .get("password")
                 .and_then(|v| v.as_str())
                 .map(String::from),
+            mode: get_str(air, "mode", "airplay2"),
         });
     }
 
@@ -410,6 +432,8 @@ fn parse_document(doc: &DocumentMut) -> ServerConfig {
                 name: get_str(client, "name", ""),
                 mac: get_str(client, "mac", ""),
                 zone: get_str(client, "zone", ""),
+                icon: get_str(client, "icon", "🔊"),
+                max_volume: get_u8(client, "max_volume", 100),
                 knx: client
                     .get("knx")
                     .and_then(Item::as_table)
@@ -440,6 +464,9 @@ fn apply_config(doc: &mut DocumentMut, config: &ServerConfig) {
 }
 
 fn apply_config_sections(doc: &mut DocumentMut, config: &ServerConfig) {
+    // Name
+    doc["name"] = toml_edit::value(&config.name);
+
     // HTTP
     if !config.http.api_keys.is_empty() {
         let http = doc
@@ -508,6 +535,11 @@ fn apply_config_sections(doc: &mut DocumentMut, config: &ServerConfig) {
         set_table_str(doc, "snapcast", "encryption_psk", psk);
     }
 
+    // mDNS
+    let mdns = doc
+        .entry("mdns")
+        .or_insert_with(|| Item::Table(toml_edit::Table::new()));
+    mdns["advertise_snapcast"] = toml_edit::value(config.snapcast.advertise_snapcast);
     apply_config_optional(doc, config);
 }
 
@@ -521,6 +553,9 @@ fn apply_config_optional(doc: &mut DocumentMut, config: &ServerConfig) {
             t["url"] = toml_edit::value(&s.url);
             t["username"] = toml_edit::value(&s.username);
             t["password"] = toml_edit::value(&s.password);
+            if s.format != "raw" {
+                t["format"] = toml_edit::value(&s.format);
+            }
             t
         }),
     );
@@ -541,6 +576,9 @@ fn apply_config_optional(doc: &mut DocumentMut, config: &ServerConfig) {
         "airplay",
         config.airplay.as_ref().map(|a| {
             let mut t = Table::new();
+            if a.mode != "airplay2" {
+                t["mode"] = toml_edit::value(&a.mode);
+            }
             if let Some(pw) = &a.password {
                 t["password"] = toml_edit::value(pw);
             }
@@ -609,6 +647,10 @@ fn apply_config_arrays(doc: &mut DocumentMut, config: &ServerConfig) {
         t["name"] = toml_edit::value(&client.name);
         t["mac"] = toml_edit::value(&client.mac);
         t["zone"] = toml_edit::value(&client.zone);
+        t["icon"] = toml_edit::value(&client.icon);
+        if client.max_volume < 100 {
+            t["max_volume"] = toml_edit::value(i64::from(client.max_volume));
+        }
         if let Some(knx) = &client.knx {
             t["knx"] = Item::Table(build_client_knx_table(knx));
         }

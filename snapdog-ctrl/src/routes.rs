@@ -457,6 +457,8 @@ mod mock_handlers {
                 name: "Kitchen".into(),
                 mac: "aa:bb:cc:dd:ee:ff".into(),
                 zone: "Living Room".into(),
+                icon: "🍽️".into(),
+                max_volume: 100,
                 knx: None,
             }],
             radio: vec![RadioStation {

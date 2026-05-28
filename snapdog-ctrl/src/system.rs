@@ -11,6 +11,70 @@ use crate::routes::{
     TimezoneInfo, UpdateCheckResponse, WifiInfo, WifiNetwork, WifiScanResult,
 };
 
+// --- Health Check ---
+
+#[derive(serde::Serialize, Clone)]
+pub struct HealthWarning {
+    pub id: &'static str,
+    pub severity: &'static str,
+}
+
+/// Run preflight checks. Panics if /data is not mounted (critical).
+/// Returns warnings for non-critical issues.
+pub async fn preflight_check() -> Vec<HealthWarning> {
+    // Critical: /data must be mounted and writable
+    let data_mounted = tokio::fs::metadata("/data").await.is_ok();
+    assert!(
+        data_mounted,
+        "/data is not mounted — cannot start without persistent storage"
+    );
+
+    let test_file = "/data/.health-check";
+    let writable = tokio::fs::write(test_file, "ok").await.is_ok();
+    let _ = tokio::fs::remove_file(test_file).await;
+    assert!(
+        writable,
+        "/data is mounted but not writable — cannot persist configuration"
+    );
+
+    // Non-critical checks
+    let mut warnings = Vec::new();
+
+    if tokio::fs::metadata("/boot").await.is_err() {
+        warnings.push(HealthWarning {
+            id: "boot_not_mounted",
+            severity: "warn",
+        });
+    }
+
+    if tokio::fs::metadata("/sys/class/net/wlan0").await.is_err() {
+        warnings.push(HealthWarning {
+            id: "no_wlan",
+            severity: "info",
+        });
+    }
+
+    // Check inactive partition exists
+    if inactive_root_partition_exists().await.is_err() {
+        warnings.push(HealthWarning {
+            id: "no_inactive_partition",
+            severity: "warn",
+        });
+    }
+
+    for w in &warnings {
+        tracing::warn!("health: [{}] {}", w.severity, w.id);
+    }
+
+    warnings
+}
+
+async fn inactive_root_partition_exists() -> Result<()> {
+    let target = inactive_root_partition().await?;
+    tokio::fs::metadata(&target).await?;
+    Ok(())
+}
+
 // --- System ---
 
 pub async fn get_system_info() -> SystemInfo {

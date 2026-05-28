@@ -258,6 +258,10 @@
     "licenseLabel": "LICENSE",
     "licenseValue": "GPL-3.0 ↗",
     "done": "Hecho"
+  },
+  "health": {
+    "boot_not_mounted": "Partición boot no montada — actualizaciones OTA desactivadas",
+    "no_wlan": "Sin adaptador WiFi — AP no disponible",
+    "no_inactive_partition": "Partición inactiva no encontrada — actualizaciones desactivadas"
   }
 }
-

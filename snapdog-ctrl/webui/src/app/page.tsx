@@ -2130,6 +2130,40 @@ export default function Page() {
   return <SetupPage />;
 }
 
+function HealthBanner() {
+  const t = useTranslations("health");
+  const [warnings, setWarnings] = useState<{ id: string; severity: string }[]>([]);
+  const [dismissed, setDismissed] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set();
+    const stored = localStorage.getItem("snapdog_dismissed_warnings");
+    return stored ? new Set(JSON.parse(stored)) : new Set();
+  });
+
+  useEffect(() => {
+    api.getHealth().then((h) => setWarnings(h.warnings)).catch(() => {});
+  }, []);
+
+  const dismiss = (id: string) => {
+    const next = new Set([...dismissed, id]);
+    setDismissed(next);
+    localStorage.setItem("snapdog_dismissed_warnings", JSON.stringify([...next]));
+  };
+
+  const visible = warnings.filter((w) => !dismissed.has(w.id));
+  if (visible.length === 0) return null;
+
+  return (
+    <div className="mx-auto w-full max-w-2xl px-4 pt-4 space-y-2">
+      {visible.map((w) => (
+        <div key={w.id} className={`flex items-center justify-between rounded-lg px-3 py-2 text-xs ${w.severity === "warn" ? "bg-yellow-500/10 text-yellow-800 dark:text-yellow-300" : "bg-blue-500/10 text-blue-800 dark:text-blue-300"}`} role="alert">
+          <span>{t(w.id)}</span>
+          <button type="button" onClick={() => dismiss(w.id)} className="ml-2 opacity-60 hover:opacity-100" aria-label="Dismiss">✕</button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function SetupPage() {
   const t = useTranslations("tabs");
   const systemT = useTranslations("system");
@@ -2160,6 +2194,7 @@ function SetupPage() {
       <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground">
         {t("skipToContent")}
       </a>
+      <HealthBanner />
       <main id="main-content" className="mx-auto w-full max-w-2xl px-4 py-6">
         <header className="mb-6 flex items-center gap-3">
           <img src="/icon.svg" alt="" className="size-10" aria-hidden="true" />

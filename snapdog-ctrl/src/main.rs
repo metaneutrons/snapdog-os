@@ -108,6 +108,7 @@ async fn build_app() -> Router {
     tracing::info!("🔶 Running in MOCK mode (debug build)");
 
     let auth_state = auth::AuthState::load().await;
+    let health_state = routes::HealthState(std::sync::Arc::new(vec![]));
 
     let (tx, _rx) = tokio::sync::broadcast::channel::<String>(100);
     let ws_sender = ws::WsSender(tx);
@@ -122,6 +123,7 @@ async fn build_app() -> Router {
                 async move { auth::require_auth_ext(auth, req, next).await }
             }
         }))
+        .layer(axum::Extension(health_state))
         .layer(axum::Extension(auth_state))
         .layer(axum::Extension(ws_sender))
         .layer(CompressionLayer::new())
@@ -165,6 +167,10 @@ async fn build_app() -> Router {
         system::apply_service_config().await;
     });
 
+    // Preflight health check (panics if /data not mounted)
+    let health_warnings = system::preflight_check().await;
+    let health_state = routes::HealthState(std::sync::Arc::new(health_warnings));
+
     // Start auto-update scheduler
     auto_update::spawn();
 
@@ -177,6 +183,7 @@ async fn build_app() -> Router {
         .nest("/api", routes::api())
         .merge(routes::captive_portal_routes())
         .fallback(routes::static_files)
+        .layer(axum::Extension(health_state))
         .layer(axum::middleware::from_fn({
             let auth = auth_state.clone();
             move |req, next| {

@@ -237,6 +237,9 @@ export const api = {
   flashRawConfirm: (challenge: string) =>
     request<void>("/api/system/update/flash-raw/confirm", { method: "POST", body: JSON.stringify({ challenge }) }),
 
+  // Health
+  getHealth: () => request<{ ok: boolean; warnings: { id: string; severity: string }[] }>("/api/system/health"),
+
   // Reboot
   reboot: () => request<void>("/api/system/reboot", { method: "POST" }),
 };

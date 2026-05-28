@@ -60,6 +60,7 @@ pub fn api() -> Router {
         .route("/auth/password", put(put_auth_password))
         // System
         .route("/system", get(get_system).put(put_system))
+        .route("/system/health", get(get_health))
         .route("/system/reboot", post(post_reboot))
         .route("/system/update", post(post_update))
         .route("/system/update/check", get(get_update_check))
@@ -557,6 +558,7 @@ pub fn api_mock(state: crate::mock::MockState) -> Router {
         .route("/auth/password", put(h::put_auth_password))
         // System
         .route("/system", get(h::get_system).put(h::put_system))
+        .route("/system/health", get(get_health))
         .route("/system/reboot", post(h::reboot))
         .route("/system/update", post(h::update))
         .route("/system/update/check", get(h::get_update_check))
@@ -647,6 +649,16 @@ pub struct TimezoneInfo {
 #[derive(Deserialize)]
 pub struct TimezoneUpdate {
     pub timezone: String,
+}
+
+#[derive(Clone)]
+pub struct HealthState(pub std::sync::Arc<Vec<system::HealthWarning>>);
+
+async fn get_health(Extension(health): Extension<HealthState>) -> Json<serde_json::Value> {
+    Json(serde_json::json!({
+        "ok": health.0.is_empty(),
+        "warnings": *health.0,
+    }))
 }
 
 async fn get_system() -> Json<SystemInfo> {

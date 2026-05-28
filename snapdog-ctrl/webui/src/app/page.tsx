@@ -1093,19 +1093,7 @@ function UpdateTab() {
         return api.installUpdate();
       })
       .then(() => {
-        setTimeout(() => {
-          setPhase("rebooting");
-          const startTime = Date.now();
-          const poll = setInterval(async () => {
-            if (Date.now() - startTime > 120000) { clearInterval(poll); setPhase("failed"); return; }
-            try {
-              setPhase("reconnecting");
-              await api.getSystem();
-              clearInterval(poll);
-              setPhase("done");
-            } catch { /* still rebooting */ }
-          }, 3000);
-        }, 10000);
+        setPhase("done");
       })
       .catch((err) => {
         console.error(err);
@@ -1128,8 +1116,13 @@ function UpdateTab() {
           <UpdatePhaseIndicator label={t(`phase_${phase}`)} />
         )}
         {phase === "done" && (
-          <div className="rounded-lg bg-green-500/10 p-4 text-sm" role="status">
+          <div className="rounded-lg bg-green-500/10 p-4 text-sm space-y-3" role="status">
             <p className="font-medium text-green-700 dark:text-green-400">{t("updateSuccess")}</p>
+            <p className="text-xs text-muted-foreground">Reboot to activate the new version.</p>
+            <div className="flex gap-2">
+              <Button size="sm" onClick={() => { api.reboot(); setPhase("idle"); }}>Reboot now</Button>
+              <Button variant="outline" size="sm" onClick={() => setPhase("idle")}>Later</Button>
+            </div>
           </div>
         )}
         {phase === "failed" && !rolledBack && (
@@ -1285,7 +1278,74 @@ function UpdateTab() {
           </div>
         </div>
       )}
+      <RawFlashSection />
     </Card>
+  );
+}
+
+function RawFlashSection() {
+  const [expanded, setExpanded] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [challenge, setChallenge] = useState<string | null>(null);
+  const [input, setInput] = useState("");
+  const [status, setStatus] = useState<"idle" | "uploading" | "confirming" | "flashing" | "done" | "error">("idle");
+  const id = useId();
+
+  const handleUpload = async () => {
+    if (!file) return;
+    setStatus("uploading");
+    try {
+      const res = await api.flashRawUpload(file);
+      setChallenge(res.challenge);
+      setStatus("confirming");
+    } catch { setStatus("error"); }
+  };
+
+  const handleConfirm = async () => {
+    if (!challenge || input.toUpperCase() !== challenge) return;
+    setStatus("flashing");
+    try {
+      await api.flashRawConfirm(challenge);
+      setStatus("done");
+    } catch { setStatus("error"); }
+  };
+
+  return (
+    <div className="border-t border-border pt-3 mt-3">
+      <button type="button" onClick={() => setExpanded(!expanded)} className="text-xs text-muted-foreground hover:text-foreground">
+        ▸ Advanced: Raw Flash (escape hatch)
+      </button>
+      {expanded && (
+        <div className="mt-3 space-y-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+          <p className="text-xs text-destructive font-medium">⚠️ Bypasses signature verification. Use only for recovery or development.</p>
+          {status === "idle" && (
+            <>
+              <div>
+                <label htmlFor={id} className="text-xs font-medium">Root filesystem image (.img or .img.gz)</label>
+                <input id={id} type="file" accept=".img,.img.gz,.gz" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="mt-1 block w-full text-xs" />
+              </div>
+              <Button size="sm" variant="outline" disabled={!file} onClick={handleUpload}>Upload &amp; prepare</Button>
+            </>
+          )}
+          {status === "uploading" && <p className="text-xs">Uploading...</p>}
+          {status === "confirming" && challenge && (
+            <div className="space-y-2">
+              <p className="text-xs">Type <code className="font-bold text-destructive">{challenge}</code> to confirm flash:</p>
+              <Input value={input} onChange={(e) => setInput(e.target.value.toUpperCase())} placeholder={challenge} className="font-mono text-center" />
+              <Button size="sm" variant="outline" disabled={input !== challenge} onClick={handleConfirm}>Confirm flash</Button>
+            </div>
+          )}
+          {status === "flashing" && <p className="text-xs">Flashing to inactive partition...</p>}
+          {status === "done" && (
+            <div className="space-y-2">
+              <p className="text-xs text-green-600">Flash complete. Reboot to activate.</p>
+              <Button size="sm" onClick={() => api.reboot()}>Reboot now</Button>
+            </div>
+          )}
+          {status === "error" && <p className="text-xs text-destructive">Failed. Challenge expired or upload error.</p>}
+        </div>
+      )}
+    </div>
   );
 }
 

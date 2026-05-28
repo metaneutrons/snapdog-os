@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::server_config::{self, ServerConfig};
 use crate::system;
+use rand::distr::SampleString;
 
 // --- Static files ---
 
@@ -65,6 +66,11 @@ pub fn api() -> Router {
         .route("/system/update/status", get(get_update_status))
         .route("/system/update/upload", post(post_update_upload))
         .route("/system/update/install", post(post_update_install))
+        .route("/system/update/flash-raw", post(post_flash_raw_upload))
+        .route(
+            "/system/update/flash-raw/confirm",
+            post(post_flash_raw_confirm),
+        )
         .route(
             "/system/update/auto",
             get(get_auto_update).put(put_auto_update),
@@ -768,6 +774,95 @@ async fn post_update_install() -> StatusCode {
         tracing::error!("post_update_install: {e}");
         return StatusCode::INTERNAL_SERVER_ERROR;
     }
+    StatusCode::ACCEPTED
+}
+
+// --- Raw Flash (Escape Hatch) ---
+
+use std::sync::OnceLock;
+use tokio::sync::Mutex;
+
+struct PendingFlash {
+    challenge: String,
+    expires: std::time::Instant,
+}
+
+static PENDING_FLASH: OnceLock<Mutex<Option<PendingFlash>>> = OnceLock::new();
+
+fn flash_lock() -> &'static Mutex<Option<PendingFlash>> {
+    PENDING_FLASH.get_or_init(|| Mutex::new(None))
+}
+
+#[derive(Serialize)]
+struct FlashChallengeResponse {
+    challenge: String,
+    expires_in_seconds: u64,
+}
+
+async fn post_flash_raw_upload(
+    mut multipart: axum::extract::Multipart,
+) -> Result<Json<FlashChallengeResponse>, StatusCode> {
+    let dest = "/tmp/pending-flash.img.gz";
+    let _ = tokio::fs::remove_file(dest).await;
+
+    let mut file = tokio::fs::File::create(dest).await.map_err(|e| {
+        tracing::error!("flash-raw create: {e}");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    while let Ok(Some(mut field)) = multipart.next_field().await {
+        while let Ok(Some(chunk)) = field.chunk().await {
+            use tokio::io::AsyncWriteExt;
+            file.write_all(&chunk).await.map_err(|e| {
+                tracing::error!("flash-raw write: {e}");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+        }
+    }
+
+    // Generate challenge
+    let challenge = rand::distr::Alphanumeric
+        .sample_string(&mut rand::rng(), 6)
+        .to_uppercase();
+    let expires = std::time::Instant::now() + std::time::Duration::from_secs(60);
+
+    *flash_lock().lock().await = Some(PendingFlash {
+        challenge: challenge.clone(),
+        expires,
+    });
+
+    Ok(Json(FlashChallengeResponse {
+        challenge,
+        expires_in_seconds: 60,
+    }))
+}
+
+#[derive(Deserialize)]
+struct FlashConfirmRequest {
+    challenge: String,
+}
+
+async fn post_flash_raw_confirm(Json(body): Json<FlashConfirmRequest>) -> StatusCode {
+    let mut lock = flash_lock().lock().await;
+    let valid = lock
+        .as_ref()
+        .is_some_and(|p| p.challenge == body.challenge && p.expires > std::time::Instant::now());
+
+    if !valid {
+        return StatusCode::FORBIDDEN;
+    }
+
+    // Consume the challenge
+    *lock = None;
+    drop(lock);
+
+    // Flash to inactive partition
+    tokio::spawn(async {
+        if let Err(e) = system::flash_raw_image("/tmp/pending-flash.img.gz").await {
+            tracing::error!("flash-raw failed: {e}");
+        }
+    });
+
     StatusCode::ACCEPTED
 }
 

@@ -92,6 +92,33 @@ pub async fn rauc_install(source: &str) -> Result<()> {
     Ok(())
 }
 
+/// Flash a raw .img.gz to the inactive root partition (escape hatch, bypasses RAUC).
+pub async fn flash_raw_image(image_path: &str) -> Result<()> {
+    // Determine inactive partition
+    let active = read_file("/proc/cmdline").await.unwrap_or_default();
+    let target = if active.contains("mmcblk0p2") {
+        "/dev/mmcblk0p3"
+    } else {
+        "/dev/mmcblk0p2"
+    };
+
+    tracing::warn!("Raw flash: writing {image_path} to {target}");
+
+    let status = tokio::process::Command::new("sh")
+        .args([
+            "-c",
+            &format!("gzip -dc '{image_path}' | dd of={target} bs=4M status=none"),
+        ])
+        .status()
+        .await?;
+
+    anyhow::ensure!(status.success(), "dd failed with exit code {status}");
+
+    let _ = tokio::fs::remove_file(image_path).await;
+    tracing::info!("Raw flash complete. Reboot required.");
+    Ok(())
+}
+
 /// Get RAUC installation progress.
 pub async fn rauc_progress() -> Result<crate::rauc::InstallProgress> {
     crate::rauc::Rauc::connect().await?.progress().await

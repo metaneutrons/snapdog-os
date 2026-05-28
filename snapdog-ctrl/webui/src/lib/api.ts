@@ -139,7 +139,6 @@ export const api = {
   getSystem: () => request<SystemInfo>("/api/system"),
   setSystem: (data: { hostname?: string; channel?: string }) =>
     request<void>("/api/system", { method: "PUT", body: JSON.stringify(data) }),
-  reboot: () => request<void>("/api/system/reboot", { method: "POST" }),
   triggerUpdate: () => request<void>("/api/system/update", { method: "POST" }),
   checkUpdate: () => request<UpdateCheck>("/api/system/update/check"),
   getUpdateStatus: () => request<import("./api").UpdateStatus>("/api/system/update/status"),
@@ -223,6 +222,23 @@ export const api = {
   getAutoUpdate: () => request<{ enabled: boolean; channel: string; interval: string; time: string }>("/api/system/update/auto"),
   setAutoUpdate: (config: { enabled: boolean; channel: string; interval: string; time: string }) =>
     request<void>("/api/system/update/auto", { method: "PUT", body: JSON.stringify(config) }),
+
+  // Raw Flash
+  flashRawUpload: async (file: File): Promise<{ challenge: string; expires_in_seconds: number }> => {
+    const form = new FormData();
+    form.append("file", file);
+    const headers: Record<string, string> = {};
+    const token = getToken();
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    const res = await fetch("/api/system/update/flash-raw", { method: "POST", headers, body: form });
+    if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+    return res.json();
+  },
+  flashRawConfirm: (challenge: string) =>
+    request<void>("/api/system/update/flash-raw/confirm", { method: "POST", body: JSON.stringify({ challenge }) }),
+
+  // Reboot
+  reboot: () => request<void>("/api/system/reboot", { method: "POST" }),
 };
 
 export interface AuthStatus {

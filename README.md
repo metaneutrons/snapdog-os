@@ -221,13 +221,13 @@ Output: `../buildroot-pi4/images/sdcard.img`
 
 | Aspect | Default |
 |--------|---------|
-| SSH | disabled by default |
-| SSH auth | pubkey only (password auth forbidden) |
-| Root password | `snapdog` (local console only) |
-| Web UI | No authentication (local network only) |
-| OTA | Signed metadata, SHA256 verified payloads, auto-rollback on failure |
-| Watchdog | Hardware, 30s timeout via systemd |
-| Filesystem | Completely read-only system partition; all mutable configurations are symlinked to a dedicated `/data` partition |
+| Web UI | Optional password (protects UI + console login) |
+| SSH | Disabled, key-only when enabled via UI |
+| Root password | `snapdog` (changeable via Web UI) |
+| OTA bundles | X.509 signed RAUC verity bundles, auto-rollback |
+| SoftAP | WPA2, configurable password (default: `snapdog123`) |
+| Filesystem | Read-only rootfs; mutable config on `/data` partition |
+| Raw flash | Challenge-response gated (not automatable) |
 
 ## Related
 
@@ -253,14 +253,20 @@ Required secrets for releases:
 - `R2_ENDPOINT_URL` — Cloudflare R2 endpoint
 - `SNAPDOG_UPDATE_SIGNING_KEY_PEM` — private RSA update metadata signing key
 
-Signing key bootstrap:
+RAUC signing key (X.509):
 
 ```bash
-scripts/generate-update-signing-key.sh
-gh secret set SNAPDOG_UPDATE_SIGNING_KEY_PEM < secrets/update-signing.private.pem
+# Generate CA keypair (once)
+openssl req -x509 -newkey rsa:4096 -nodes -days 3650 \
+  -keyout secrets/rauc-ca.key.pem \
+  -out buildroot/keys/rauc-ca.cert.pem \
+  -subj "/O=SnapDog/CN=SnapDog OS Update CA"
+
+# Add to GitHub secrets
+gh secret set RAUC_CA_KEY_PEM < secrets/rauc-ca.key.pem
 ```
 
-The public key is baked into the OS image at `/etc/snapdog-os-update.pub.pem`. The release workflow refuses to publish if the private signing key does not match the committed public key.
+The CA certificate is baked into the OS image at `/etc/rauc/ca.cert.pem`. Only bundles signed with the matching private key can be installed.
 
 ## Roadmap
 

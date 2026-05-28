@@ -144,7 +144,7 @@ function AboutOverlay({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* Monospace Tech Spec Grid */}
-        <div className="grid grid-cols-2 gap-2 w-full font-mono text-left text-xs pt-1 flex-shrink-0">
+        <div className="grid grid-cols-[2fr_1fr] gap-2 w-full font-mono text-left text-xs pt-1 flex-shrink-0">
           <div className="flex flex-col py-2 px-3 rounded-lg bg-muted/15 dark:bg-muted/5 border border-border/30">
             <span className="text-[8px] sm:text-[9px] uppercase font-semibold text-muted-foreground/65 tracking-wider">{t("modelLabel")}</span>
             <span className="font-semibold text-foreground mt-0.5 tracking-tight text-xs sm:text-sm">{t("modelValue")}</span>

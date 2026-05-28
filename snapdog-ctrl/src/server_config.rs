@@ -279,7 +279,7 @@ pub fn validate(config: &ServerConfig) -> Result<()> {
 /// Generate a default config file.
 pub fn default_config_toml() -> String {
     r#"# SnapDog Server Configuration
-# Edit via SnapDog Control (http://snapdog) or manually.
+# Managed by snapdog-ctrl — do not edit manually.
 
 [system]
 log_level = "info"

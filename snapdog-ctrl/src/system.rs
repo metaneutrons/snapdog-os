@@ -169,7 +169,7 @@ pub async fn flash_raw_image(image_path: &str) -> Result<()> {
     let status = tokio::process::Command::new("sh")
         .args([
             "-c",
-            &format!("gzip -dc '{image_path}' | dd of={target} bs=4M status=none"),
+            &format!("gzip -dc '{image_path}' | dd of={target} bs=4M conv=fsync status=none"),
         ])
         .status()
         .await?;

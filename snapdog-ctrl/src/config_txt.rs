@@ -13,6 +13,7 @@ const BACKUP_PATH: &str = "/boot/config.txt.bak";
 
 /// Known DAC/AMP overlay prefixes that we manage.
 const AUDIO_OVERLAY_PREFIXES: &[&str] = &[
+    "hifiberry-",
     "allo-",
     "iqaudio-",
     "justboom-",

@@ -1044,7 +1044,7 @@ async fn get_softap() -> Json<system::SoftApConfig> {
 }
 
 async fn put_softap(Json(body): Json<system::SoftApConfig>) -> StatusCode {
-    if body.password.len() < 8 {
+    if body.password.len() < 8 || body.password.contains('\n') || body.password.contains('\r') {
         return StatusCode::BAD_REQUEST;
     }
     if let Err(e) = system::set_softap_config(body).await {

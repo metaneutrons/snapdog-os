@@ -1759,7 +1759,7 @@ function ServerSourcesSubTab({ config, setConfig }: { config: ServerConfig; setC
         </div>
         {config.airplay && (
           <div className="space-y-2 pl-2 border-l-2 border-border">
-            <Field label={t("password")} htmlFor={airPassId}><Input id={airPassId} value={config.airplay.password ?? ""} onChange={(e) => { const c = structuredClone(config); c.airplay = { ...c.airplay!, password: e.target.value || null }; setConfig(c); }} /></Field>
+            <Field label={t("password")} htmlFor={airPassId}><Input id={airPassId} value={config.airplay.password ?? ""} onChange={(e) => { const c = structuredClone(config); c.airplay = { ...c.airplay!, password: e.target.value || null }; setConfig(c); }} placeholder={t("airplayPasswordHint")} /></Field>
             <Field label={t("airplayMode")} htmlFor={`${airPassId}-mode`}>
               <Select id={`${airPassId}-mode`} value={config.airplay.mode} onChange={(e) => { const c = structuredClone(config); c.airplay = { ...c.airplay!, mode: e.target.value }; setConfig(c); }}>
                 <option value="airplay2">AirPlay 2</option>

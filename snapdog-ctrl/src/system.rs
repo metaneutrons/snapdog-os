@@ -94,13 +94,7 @@ pub async fn rauc_install(source: &str) -> Result<()> {
 
 /// Flash a raw .img.gz to the inactive root partition (escape hatch, bypasses RAUC).
 pub async fn flash_raw_image(image_path: &str) -> Result<()> {
-    // Determine inactive partition
-    let active = read_file("/proc/cmdline").await.unwrap_or_default();
-    let target = if active.contains("mmcblk0p2") {
-        "/dev/mmcblk0p3"
-    } else {
-        "/dev/mmcblk0p2"
-    };
+    let target = inactive_root_partition().await?;
 
     tracing::warn!("Raw flash: writing {image_path} to {target}");
 
@@ -117,6 +111,26 @@ pub async fn flash_raw_image(image_path: &str) -> Result<()> {
     let _ = tokio::fs::remove_file(image_path).await;
     tracing::info!("Raw flash complete. Reboot required.");
     Ok(())
+}
+
+/// Determine the inactive root partition from the active one in /proc/cmdline.
+/// Supports mmcblk (SD/eMMC) and nvme devices.
+async fn inactive_root_partition() -> Result<String> {
+    let cmdline = read_file("/proc/cmdline").await.unwrap_or_default();
+    let root = cmdline
+        .split_whitespace()
+        .find(|s| s.starts_with("root="))
+        .map(|s| s.trim_start_matches("root="))
+        .ok_or_else(|| anyhow::anyhow!("cannot find root= in /proc/cmdline"))?;
+
+    // Swap partition 2 <-> 3 (A/B)
+    if let Some(base) = root.strip_suffix('2') {
+        Ok(format!("{base}3"))
+    } else if let Some(base) = root.strip_suffix('3') {
+        Ok(format!("{base}2"))
+    } else {
+        anyhow::bail!("unexpected root partition: {root} (expected p2 or p3)")
+    }
 }
 
 /// Get RAUC installation progress.

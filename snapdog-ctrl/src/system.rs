@@ -677,17 +677,16 @@ pub async fn bundle_url(channel: &str) -> String {
     format!("{UPDATE_BASE_URL}/{board}{suffix}.raucb")
 }
 
-pub async fn detect_board() -> &'static str {
+pub async fn detect_board() -> String {
+    // Read compatible string from RAUC system.conf (e.g. "snapdog-os-pi4")
     let content = tokio::fs::read_to_string("/etc/rauc/system.conf")
         .await
         .unwrap_or_default();
-    if content.contains("pi5") {
-        "pi5"
-    } else if content.contains("pi3") {
-        "pi3"
-    } else {
-        "pi4"
-    }
+    content
+        .lines()
+        .find_map(|l| l.strip_prefix("compatible="))
+        .unwrap_or("snapdog-os-pi4")
+        .to_string()
 }
 
 pub async fn check_update() -> UpdateCheckResponse {

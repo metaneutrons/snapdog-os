@@ -5,7 +5,7 @@
 
 use crate::system::{get_auto_update, rauc_install, rauc_operation};
 
-const UPDATE_BASE_URL: &str = "https://update.snapdog.cc/os/bundles";
+const UPDATE_BASE_URL: &str = "https://updates.snapdog.cc/os/bundles";
 const SECS_PER_DAY: u64 = 24 * 3600;
 const SECS_PER_WEEK: u64 = 7 * SECS_PER_DAY;
 const SECS_PER_MONTH: u64 = 30 * SECS_PER_DAY;

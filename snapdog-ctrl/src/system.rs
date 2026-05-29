@@ -686,7 +686,7 @@ pub async fn set_ssh(config: SshConfig) -> Result<()> {
 
 // --- OTA Update (RAUC) ---
 
-const UPDATE_BASE_URL: &str = "https://update.snapdog.cc/os/bundles";
+const UPDATE_BASE_URL: &str = "https://updates.snapdog.cc/os/bundles";
 
 /// Construct the bundle URL for a given channel.
 pub async fn bundle_url(channel: &str) -> String {

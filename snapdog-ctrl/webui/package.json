@@ -40,6 +40,8 @@
     "postcss": "^8.5.10"
   },
   "optionalDependencies": {
-    "@parcel/watcher-linux-x64-glibc": "^2.5.6"
+    "@parcel/watcher-linux-x64-glibc": "2.5.1",
+    "lightningcss-linux-x64-gnu": "1.29.3",
+    "@swc/core-linux-x64-gnu": "1.11.29"
   }
 }

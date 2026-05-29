@@ -10,7 +10,7 @@ use tokio::process::Command;
 const WPA_CONF: &str = "/etc/wpa_supplicant/wpa_supplicant-wlan0.conf";
 const HOSTAPD_CONF: &str = "/etc/hostapd/hostapd.conf";
 const DNSMASQ_CONF: &str = "/etc/dnsmasq.d/snapdog-ap.conf";
-const ETH_NETWORK: &str = "/etc/systemd/network/10-ethernet.network";
+pub const ETH_NETWORK_PATH: &str = "/etc/systemd/network/10-ethernet.network";
 const WIFI_NETWORK: &str = "/etc/systemd/network/20-wifi.network";
 
 /// Check if `WiFi` is configured (has at least one network block).
@@ -178,7 +178,7 @@ pub async fn configure_ethernet(static_ip: Option<&StaticConfig>) -> Result<()> 
             )
         },
     );
-    write_config(ETH_NETWORK, &network).await?;
+    write_config(ETH_NETWORK_PATH, &network).await?;
     run("systemctl", &["restart", "systemd-networkd"]).await?;
     Ok(())
 }

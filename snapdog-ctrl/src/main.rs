@@ -134,6 +134,13 @@ async fn build_app() -> Router {
 async fn build_app() -> Router {
     // Start setup AP only if no network interface is configured
     tokio::spawn(async {
+        // Ensure ethernet has a network config (write DHCP default if missing)
+        if tokio::fs::metadata(network::ETH_NETWORK_PATH)
+            .await
+            .is_err()
+        {
+            let _ = network::configure_ethernet(None).await;
+        }
         let _ = network::configure_resolved().await;
 
         let softap = system::get_softap_config().await;

@@ -10,7 +10,6 @@ use tokio::process::Command;
 const WPA_CONF: &str = "/etc/wpa_supplicant/wpa_supplicant-wlan0.conf";
 const HOSTAPD_CONF: &str = "/etc/hostapd/hostapd.conf";
 const DNSMASQ_CONF: &str = "/etc/dnsmasq.d/snapdog-ap.conf";
-const RESOLVED_CONF: &str = "/etc/systemd/resolved.conf.d/snapdog.conf";
 const ETH_NETWORK: &str = "/etc/systemd/network/10-ethernet.network";
 const WIFI_NETWORK: &str = "/etc/systemd/network/20-wifi.network";
 
@@ -58,6 +57,7 @@ pub async fn stop_ap() -> Result<()> {
     let _ = run("systemctl", &["stop", "hostapd"]).await;
     let _ = run("systemctl", &["stop", "dnsmasq"]).await;
     run("ip", &["addr", "flush", "dev", "wlan0"]).await?;
+    run("systemctl", &["start", "systemd-resolved"]).await?;
     run("systemctl", &["restart", "wpa_supplicant@wlan0"]).await?;
     run("systemctl", &["restart", "systemd-networkd"]).await?;
     Ok(())
@@ -185,9 +185,8 @@ pub async fn configure_ethernet(static_ip: Option<&StaticConfig>) -> Result<()> 
 
 /// Configure systemd-resolved (disable stub resolver).
 pub async fn configure_resolved() -> Result<()> {
-    let conf = "[Resolve]\nDNSStubListener=no\n";
-    write_config(RESOLVED_CONF, conf).await?;
-    run("systemctl", &["restart", "systemd-resolved"]).await?;
+    // Stop resolved entirely — dnsmasq takes over DNS in AP mode
+    run("systemctl", &["stop", "systemd-resolved"]).await?;
     Ok(())
 }
 

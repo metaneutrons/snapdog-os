@@ -1,0 +1,32 @@
+#!/bin/sh
+# Apply patches to buildroot source tree.
+# Called after cloning/checking out buildroot.
+set -eu
+
+BR="${1:?usage: $0 <buildroot-dir>}"
+
+# ── brcmfmac WiFi firmware: bump to 2025-05-08 ──
+FIRMWARE_MK="$BR/package/brcmfmac_sdio-firmware-rpi/brcmfmac_sdio-firmware-rpi.mk"
+OLD_FW="26ff205b45dc109b498a70aaf182804ad9dbfea5"
+NEW_FW="6596d332eaadd63e2413e3937715a084f61c39e2"
+
+if grep -q "$OLD_FW" "$FIRMWARE_MK" 2>/dev/null; then
+  sed -i "s/$OLD_FW/$NEW_FW/g" "$FIRMWARE_MK" \
+    "$BR/package/brcmfmac_sdio-firmware-rpi/brcmfmac_sdio-firmware-rpi.hash"
+  echo "  [patch] brcmfmac firmware bumped to 2025-05-08"
+elif grep -q "$NEW_FW" "$FIRMWARE_MK" 2>/dev/null; then
+  echo "  [patch] brcmfmac firmware already at target version (upstream caught up)"
+else
+  echo "  [WARN] brcmfmac firmware: unknown upstream version — patch skipped, review needed"
+fi
+
+# ── Boot partition size: 256MB ──
+GENIMAGE="$BR/board/raspberrypi/genimage.cfg.in"
+if [ -f "$GENIMAGE" ] && grep -q '"32M"' "$GENIMAGE"; then
+  sed -i 's/32M/256M/g' "$GENIMAGE"
+  echo "  [patch] boot partition bumped to 256MB"
+elif [ -f "$GENIMAGE" ] && grep -q '"256M"' "$GENIMAGE"; then
+  echo "  [patch] boot partition already 256MB"
+else
+  echo "  [WARN] genimage.cfg.in: unexpected boot partition size — patch skipped, review needed"
+fi

@@ -15,9 +15,7 @@ services:
         if [ ! -d /build/buildroot/.git ]; then
           git clone --depth 1 --branch 2025.02 https://github.com/buildroot/buildroot /build/buildroot
         fi
-        if [ -f /build/buildroot/board/raspberrypi/genimage.cfg.in ]; then
-          sed -i 's/32M/256M/g' /build/buildroot/board/raspberrypi/genimage.cfg.in
-        fi
+        /build/snapdog-os/buildroot/scripts/patch-buildroot /build/buildroot
 
         echo '── Build snapdog-ctrl ──'
         echo '── Build snapdog-ctrl ──'

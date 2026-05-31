@@ -16,6 +16,7 @@ setup: ## Download and prepare buildroot
 		cd ../buildroot-src && git fetch --depth 1 origin tag 2025.02 && git checkout 2025.02; \
 	fi
 	@rm -f ../buildroot && ln -s buildroot-src ../buildroot
+	@buildroot/scripts/patch-buildroot ../buildroot
 
 prepare-ctrl:
 	@if [ ! -f "$(SNAPDOG_CTRL_BINARY)" ]; then \

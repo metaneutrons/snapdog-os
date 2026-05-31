@@ -57,6 +57,10 @@ mime_guess = "2"
 bcrypt = "0.19.1"
 rand = "0.10.1"
 
+# Settings export/import
+tar = "0.4"
+flate2 = "1"
+
 # D-Bus (RAUC OTA)
 zbus = "5.16.0"
 

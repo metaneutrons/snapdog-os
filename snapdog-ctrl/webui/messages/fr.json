@@ -127,7 +127,15 @@
     "logAll": "Tous les logs",
     "logServer": "Serveur audio (snapdog)",
     "logClient": "Lecteur audio (snapdog-client)",
-    "logController": "Contrôleur de configuration (snapdog-ctrl)"
+    "logController": "Contrôleur de configuration (snapdog-ctrl)",
+    "settings": "Paramètres",
+    "exportSettings": "Exporter",
+    "importSettings": "Importer",
+    "importPreview": "Aperçu de l'import :",
+    "importRebootWarning": "L'appareil redémarrera après l'import.",
+    "importConfirm": "Importer et redémarrer",
+    "importing": "Import en cours...",
+    "files": "fichiers"
   },
   "update": {
     "title": "Mise à jour",

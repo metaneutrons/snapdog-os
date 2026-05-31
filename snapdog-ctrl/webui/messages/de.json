@@ -127,7 +127,15 @@
     "logAll": "Alle System-Logs",
     "logServer": "Audioserver (snapdog)",
     "logClient": "Audioplayer (snapdog-client)",
-    "logController": "Setup-Controller (snapdog-ctrl)"
+    "logController": "Setup-Controller (snapdog-ctrl)",
+    "settings": "Einstellungen",
+    "exportSettings": "Exportieren",
+    "importSettings": "Importieren",
+    "importPreview": "Import-Vorschau:",
+    "importRebootWarning": "Gerät startet nach dem Import neu.",
+    "importConfirm": "Importieren & Neustarten",
+    "importing": "Importiere...",
+    "files": "Dateien"
   },
   "update": {
     "title": "Firmware-Update",

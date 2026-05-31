@@ -122,7 +122,15 @@
     "logAll": "All Ecosystem Logs",
     "logServer": "Audio Server (snapdog)",
     "logClient": "Audio Player (snapdog-client)",
-    "logController": "Setup Controller (snapdog-ctrl)"
+    "logController": "Setup Controller (snapdog-ctrl)",
+    "settings": "Settings",
+    "exportSettings": "Export",
+    "importSettings": "Import",
+    "importPreview": "Import preview:",
+    "importRebootWarning": "Device will reboot after import.",
+    "importConfirm": "Import & Reboot",
+    "importing": "Importing...",
+    "files": "files"
   },
   "update": {
     "title": "Firmware Update",

@@ -243,9 +243,43 @@ export const api = {
 
   // Reboot
   reboot: () => request<void>("/api/system/reboot", { method: "POST" }),
+
+  // Settings export/import
+  exportSettings: async (): Promise<Blob> => {
+    const headers: Record<string, string> = {};
+    const token = getToken();
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    const res = await fetch("/api/settings/export", { headers });
+    if (!res.ok) throw new Error(`Export failed: ${res.status}`);
+    return res.blob();
+  },
+  previewSettings: async (file: File): Promise<SettingsPreview> => {
+    const headers: Record<string, string> = {};
+    const token = getToken();
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    const res = await fetch("/api/settings/preview", { method: "POST", headers, body: await file.arrayBuffer() });
+    if (!res.ok) throw new Error(`Preview failed: ${res.status}`);
+    return res.json();
+  },
+  importSettings: async (file: File): Promise<{ status: string; rebooting: boolean }> => {
+    const headers: Record<string, string> = {};
+    const token = getToken();
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    const res = await fetch("/api/settings/import", { method: "POST", headers, body: await file.arrayBuffer() });
+    if (!res.ok) throw new Error(`Import failed: ${res.status}`);
+    return res.json();
+  },
 };
 
 export interface AuthStatus {
   enabled: boolean;
   authenticated: boolean;
+}
+
+export interface SettingsPreview {
+  hostname: string | null;
+  wifi_configured: boolean;
+  ssh_keys_present: boolean;
+  has_auth: boolean;
+  files: string[];
 }

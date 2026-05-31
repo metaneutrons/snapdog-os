@@ -101,6 +101,10 @@ pub fn api() -> Router {
         .route("/server/status", get(get_server_status))
         .route("/server/enable", post(post_server_enable))
         .route("/server/disable", post(post_server_disable))
+        // Settings export/import
+        .route("/settings/export", get(get_settings_export))
+        .route("/settings/preview", post(post_settings_preview))
+        .route("/settings/import", post(post_settings_import))
         // 404 for unknown API routes
         .fallback(api_not_found)
 }
@@ -1270,4 +1274,60 @@ async fn run_systemctl(args: &[&str]) -> anyhow::Result<()> {
             String::from_utf8_lossy(&output.stderr)
         )
     }
+}
+
+// ── Settings export/import ────────────────────────────────────
+
+async fn get_settings_export() -> impl IntoResponse {
+    match crate::settings::export_settings() {
+        Ok(data) => (
+            StatusCode::OK,
+            [
+                (
+                    axum::http::header::CONTENT_TYPE,
+                    "application/gzip".to_string(),
+                ),
+                (
+                    axum::http::header::CONTENT_DISPOSITION,
+                    "attachment; filename=\"snapdog-settings.tar.gz\"".to_string(),
+                ),
+            ],
+            data,
+        )
+            .into_response(),
+        Err(e) => {
+            tracing::error!("settings export failed: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
+}
+
+async fn post_settings_preview(body: axum::body::Bytes) -> impl IntoResponse {
+    match crate::settings::preview_settings(&body) {
+        Ok(preview) => Json(preview).into_response(),
+        Err(e) => (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+async fn post_settings_import(body: axum::body::Bytes) -> impl IntoResponse {
+    if let Err(e) = crate::settings::import_settings(&body) {
+        tracing::error!("settings import failed: {e}");
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": e.to_string()})),
+        )
+            .into_response();
+    }
+
+    tracing::info!("Settings imported, rebooting in 1s");
+    tokio::spawn(async {
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        let _ = tokio::process::Command::new("reboot").output().await;
+    });
+
+    Json(serde_json::json!({"status": "ok", "rebooting": true})).into_response()
 }

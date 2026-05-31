@@ -1476,6 +1476,79 @@ function DevicePasswordCard() {
   );
 }
 
+function SettingsCard() {
+  const t = useTranslations("system");
+  const cardId = useId();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState<import("@/lib/api").SettingsPreview | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
+
+  const handleExport = async () => {
+    const blob = await api.exportSettings();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "snapdog-settings.tar.gz";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setSelectedFile(file);
+    try {
+      const p = await api.previewSettings(file);
+      setPreview(p);
+    } catch {
+      setPreview(null);
+    }
+  };
+
+  const handleImport = async () => {
+    if (!selectedFile) return;
+    setImporting(true);
+    try {
+      await api.importSettings(selectedFile);
+    } catch {
+      setImporting(false);
+    }
+  };
+
+  return (
+    <Card title={t("settings")} id={cardId}>
+      <div className="space-y-4">
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={handleExport}>
+            {t("exportSettings")}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+            {t("importSettings")}
+          </Button>
+          <input ref={fileInputRef} type="file" accept=".tar.gz,.tgz" className="hidden" onChange={handleFileSelect} />
+        </div>
+        {preview && (
+          <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 space-y-2">
+            <p className="text-xs font-medium">{t("importPreview")}</p>
+            <ul className="text-xs text-muted-foreground space-y-1">
+              {preview.hostname && <li>Hostname: <span className="font-mono">{preview.hostname}</span></li>}
+              <li>WiFi: {preview.wifi_configured ? "✓" : "—"}</li>
+              <li>SSH Keys: {preview.ssh_keys_present ? "✓" : "—"}</li>
+              <li>Auth: {preview.has_auth ? "✓" : "—"}</li>
+              <li>{preview.files.length} {t("files")}</li>
+            </ul>
+            <p className="text-xs text-amber-500">{t("importRebootWarning")}</p>
+            <Button size="sm" onClick={handleImport} disabled={importing}>
+              {importing ? t("importing") : t("importConfirm")}
+            </Button>
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 function SystemTab() {
   const t = useTranslations("system");
   const [info, setInfo] = useState<SystemInfo | null>(null);
@@ -1490,6 +1563,7 @@ function SystemTab() {
   return (
     <div className="space-y-5">
       <DevicePasswordCard />
+      <SettingsCard />
       <TimezoneCard />
       <LogsCard />
       <Card title={t("title")} id={cardId}>

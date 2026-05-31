@@ -26,7 +26,7 @@ pub async fn start_ap(password: &str) -> Result<()> {
 
     // Write hostapd config
     let hostapd = format!(
-        "interface=wlan0\ndriver=nl80211\nssid=SnapDog-Setup\nhw_mode=g\nchannel=0\n\
+        "interface=wlan0\ndriver=nl80211\nssid=SnapDog-Setup\nhw_mode=g\nchannel=6\n\
          ieee80211n=1\nwmm_enabled=1\nwpa=2\nwpa_passphrase={password}\n\
          wpa_key_mgmt=WPA-PSK\nrsn_pairwise=CCMP\n"
     );
@@ -77,7 +77,7 @@ pub async fn connect_wifi(
     let password = wpa_quoted_string("password", password)?;
 
     let wpa = format!(
-        "ctrl_interface=/var/run/wpa_supplicant\nupdate_config=1\ncountry=DE\n\n\
+        "ctrl_interface=/var/run/wpa_supplicant\nupdate_config=1\ncountry=DE\np2p_disabled=1\n\n\
          network={{\n  ssid=\"{ssid}\"\n  psk=\"{password}\"\n  key_mgmt=WPA-PSK\n}}\n"
     );
     write_config(WPA_CONF, &wpa).await?;
@@ -104,7 +104,8 @@ pub async fn connect_wifi(
 /// Disconnect `WiFi` and remove saved credentials.
 pub async fn disconnect_wifi() -> Result<()> {
     tracing::info!("Disconnecting WiFi");
-    let wpa = "ctrl_interface=/var/run/wpa_supplicant\nupdate_config=1\ncountry=DE\n";
+    let wpa =
+        "ctrl_interface=/var/run/wpa_supplicant\nupdate_config=1\ncountry=DE\np2p_disabled=1\n";
     write_config(WPA_CONF, wpa).await?;
     run("systemctl", &["restart", "wpa_supplicant@wlan0"]).await?;
     Ok(())

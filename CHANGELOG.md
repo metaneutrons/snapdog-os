@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.4.0](https://github.com/SnapDogRocks/snapdog-os/compare/v0.3.0...v0.4.0) (2026-05-31)
+
+
+### Features
+
+* add Raspberry Pi Zero 2 W support ([a9fa8d5](https://github.com/SnapDogRocks/snapdog-os/commit/a9fa8d5214e04ab1bebb77945ebd67e6766dcd6a))
+* **settings:** export/import device settings as tar.gz ([f031922](https://github.com/SnapDogRocks/snapdog-os/commit/f03192269e910e23167592f6a1b2e9cada1ba46a))
+
+
+### Bug Fixes
+
+* enable raspi-wifi package (hostapd/dnsmasq/wpa_supplicant missing from image) ([f463d11](https://github.com/SnapDogRocks/snapdog-os/commit/f463d11653eb26dfcab6558fc38593864bc588d1))
+* **network:** kernel panic in brcmfmac P2P during AP start ([953dbc8](https://github.com/SnapDogRocks/snapdog-os/commit/953dbc8a925b4caee6c198dfdc4e9da686616fb6))
+
 ## [0.3.0](https://github.com/SnapDogRocks/snapdog-os/compare/v0.2.0...v0.3.0) (2026-05-30)
 
 
